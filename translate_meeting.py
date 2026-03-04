@@ -2512,7 +2512,13 @@ def _ask_topic():
     print(f"{C_WHITE}會議主題：{RESET}", end=" ")
 
     try:
-        user_input = input().strip()
+        # 用 buffer 直接讀 raw bytes 再解碼，避免 macOS 中文輸入法 UnicodeDecodeError
+        if hasattr(sys.stdin, 'buffer'):
+            sys.stdout.flush()
+            raw = sys.stdin.buffer.readline()
+            user_input = raw.decode('utf-8', errors='replace').strip()
+        else:
+            user_input = input().strip()
     except (EOFError, KeyboardInterrupt):
         print()
         sys.exit(0)
