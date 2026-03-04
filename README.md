@@ -52,9 +52,11 @@ Author: Jason Cheng ([Jason Tools](https://jasoncheng.com.tw))
 ![說話者辨識：不同講者以不同顏色顯示](images/offline-diarize-result.png)
 
 ### 4. AI 會議摘要
-即時按 Ctrl+S 或批次對記錄檔生成摘要，透過本地端 LLM 產出重點整理 + 校正逐字稿。
+即時按 Ctrl+S 或批次對記錄檔生成摘要，透過本地端 LLM 產出重點整理 + 校正逐字稿。搭配說話者辨識，摘要中不同講者以不同顏色區分。
 
 ![AI 會議摘要產出畫面](images/summary-output.png)
+
+![匯入錄音檔產生的摘要與校正逐字稿](images/offline-summary-diarize.png)
 
 ### 5. 多模式語音轉錄
 4 種功能模式：英翻中 / 中翻英 / 純英文轉錄 / 純中文轉錄，滿足各種使用場景。
@@ -97,27 +99,36 @@ cd jt-live-whisper && ./install.sh
 
 ### 3. 設定 macOS 音訊
 
-BlackHole 2ch 是虛擬音訊裝置，搭配 macOS「多重輸出裝置」將系統音訊同時送給你的耳機/喇叭和本程式：
+安裝 BlackHole 後需要**重新啟動電腦**，然後在「音訊 MIDI 設定」中建立虛擬裝置。
 
-```
-任何應用程式的聲音（Zoom / Teams / Meet / YouTube / Podcast ...）
-  │
-  ▼
-macOS 多重輸出裝置（你建立的）
-  ├──▶ MacBook 揚聲器 / AirPods / 耳機（你照常聽到聲音）
-  └──▶ BlackHole 2ch（虛擬音訊裝置，無聲複製一份）
-         │
-         ▼
-    jt-live-whisper 讀取 BlackHole 音訊
-      → AI 語音辨識 → 翻譯 → 終端機即時字幕
-```
+#### 3a. 建立「多重輸出裝置」（必要）
 
-安裝 BlackHole 後需要**重新啟動電腦**，然後設定多重輸出裝置：
+讓系統音訊同時送到你的耳機和 BlackHole，程式才能擷取對方的聲音：
 
-1. 開啟「音訊 MIDI 設定」（Audio MIDI Setup）
-2. 點左下角 + -> 建立「多重輸出裝置」
+1. 開啟「音訊 MIDI 設定」（Spotlight 搜尋「音訊 MIDI 設定」）
+2. 點左下角 + → 建立「多重輸出裝置」
 3. 勾選你的喇叭/耳機 + BlackHole 2ch
-4. 將系統音訊輸出設為此多重輸出裝置
+4. **主裝置選 BlackHole 2ch**（虛擬裝置時脈穩定，不會因藍牙斷線而失效）
+5. 到「系統設定 → 聲音 → 輸出」，選擇此多重輸出裝置
+
+```
+對方說話 → Zoom/Teams 輸出 → 多重輸出裝置 → 耳機（你聽到）
+                                            → BlackHole（程式擷取）→ AI 辨識 → 字幕
+```
+
+> Zoom / Teams 的喇叭輸出要設成「多重輸出裝置」，不能直接選 AirPods，否則 BlackHole 收不到聲音。麥克風維持原本的設定（如 AirPods），不需要改。
+
+#### 3b. 建立「聚集裝置」（選配，錄音時錄雙方聲音用）
+
+如果你想用 `--record` 錄音功能同時錄下**對方和自己的聲音**，需要額外建立聚集裝置：
+
+1. 在「音訊 MIDI 設定」點左下角 + → 建立「聚集裝置」
+2. 勾選 BlackHole 2ch（對方聲音）+ 你的麥克風（你的聲音）
+3. **時脈來源選 BlackHole 2ch**，其他實體裝置勾選「偏移修正」
+
+![聚集裝置設定](images/aggregate-device.png)
+
+錄音時在裝置選單選聚集裝置，即可同時錄下雙方聲音。不需要錄音的話可以跳過這步。
 
 ### 4. 安裝地端 LLM（翻譯/摘要用）
 
