@@ -43,14 +43,14 @@ macOS 系統音訊
 **遠端 GPU 伺服器架構（選配）：**
 
 ```
-[本機 macOS]                              [遠端 Linux + NVIDIA GPU]
+[本機 macOS]                                    [遠端 Linux + NVIDIA GPU]
 
-translate_meeting.py                      remote_whisper_server.py (FastAPI)
-  - 音訊擷取 / 轉檔                        - /v1/audio/transcriptions (ASR)
-  - 上傳音訊到遠端      --- HTTP --->       - /v1/audio/diarize（講者辨識）
-  - 接收辨識結果        <-- JSON ---       - faster-whisper + GPU CUDA
-  - LLM 翻譯 / 顯示 / 儲存                - resemblyzer + GPU CUDA
-  - SSH 啟停遠端伺服器   --- SSH --->
+translate_meeting.py                            remote_whisper_server.py (FastAPI)
+  - 音訊擷取 / 轉檔                              - /v1/audio/transcriptions (ASR)
+  - 上傳音訊到遠端        --- HTTP --->           - /v1/audio/diarize（講者辨識）
+  - 接收辨識結果          <-- JSON ---           - faster-whisper + GPU CUDA
+  - LLM 翻譯 / 顯示 / 儲存                      - resemblyzer + GPU CUDA
+  - SSH 啟停遠端伺服器     --- SSH --->
 ```
 
 有設定遠端 GPU 時，語音辨識和講者辨識自動在遠端執行（離線 30 分鐘音訊：本機約 3-5 分鐘，遠端 GPU 約 10-30 秒）。遠端失敗時自動降級本機。多個客戶端可同時共用同一個遠端伺服器。
