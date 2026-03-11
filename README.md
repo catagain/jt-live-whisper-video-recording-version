@@ -157,10 +157,21 @@ bash install.sh
 
 **Windows：**
 
-開啟 PowerShell（以管理員身份），貼上這一行即可自動下載並安裝（不需要 Git）：
+開啟 PowerShell（以管理員身份），建立資料夾並切換過去（不需要 Git）：
+
+```powershell
+mkdir C:\jt-live-whisper -Force | Out-Null; cd C:\jt-live-whisper
+```
+
+下載安裝程式：
 
 ```powershell
 irm https://raw.githubusercontent.com/jasoncheng7115/jt-live-whisper/main/install.ps1 -OutFile install.ps1
+```
+
+執行安裝：
+
+```powershell
 powershell -ExecutionPolicy Bypass -File install.ps1
 ```
 
