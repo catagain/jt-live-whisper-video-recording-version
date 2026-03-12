@@ -1,6 +1,6 @@
 # jt-live-whisper 安裝與使用 SOP
 
-即時英翻中字幕系統 v2.7.1 (by Jason Cheng)
+即時英翻中字幕系統 v2.7.2 (by Jason Cheng)
 
 將英文語音即時轉錄並翻譯成繁體中文字幕顯示於終端機。採用系統音訊裝置層級擷取（macOS 使用 BlackHole 虛擬音訊裝置，Windows 使用 WASAPI Loopback），**理論上任何軟體的聲音輸出都能即時處理**：視訊會議（Zoom、Teams、Meet）、YouTube、Podcast、串流影片、教育訓練等，不限定特定應用程式。亦可離線處理音訊檔案。
 
@@ -1254,6 +1254,11 @@ Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 ---
 
 ## 八、Changelog
+
+### v2.7.2 (2026-03-12)
+
+**修正**
+- 修正 install.ps1 Python 偵測：移除 WindowsApps 路徑排除邏輯，改為直接用版本輸出判斷，修正 Python 已安裝但被誤判為找不到的問題
 
 ### v2.7.1 (2026-03-12)
 
