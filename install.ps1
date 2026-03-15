@@ -252,7 +252,7 @@ $banner_line = '=' * $cols
 
 Write-Host ""
 Write-Host "${C_TITLE}${banner_line}${NC}"
-Write-Host "${C_TITLE}${BOLD}  jt-live-whisper v2.7.2 - 100% 全地端 AI 語音工具集 - Windows 安裝程式${NC}"
+Write-Host "${C_TITLE}${BOLD}  jt-live-whisper v2.11.0 - 100% 全地端 AI 語音工具集 - Windows 安裝程式${NC}"
 Write-Host "${C_TITLE}  by Jason Cheng (Jason Tools)${NC}"
 Write-Host "${C_TITLE}${banner_line}${NC}"
 Write-Host ""
@@ -696,6 +696,7 @@ $corePackages = @(
     @("librosa",                         "librosa（音訊分析）"),
     @("spectralcluster",                 "spectralcluster（講者辨識 - 分群）"),
     @("sounddevice",                     "sounddevice（音訊擷取）"),
+    @("noisereduce",                     "noisereduce（背景降噪）"),
     @("argostranslate",                  "Argos Translate（離線翻譯備援）")
 )
 
@@ -1155,6 +1156,73 @@ if ($true) {
     } else {
         check_skip "缺少編譯工具，跳過 whisper.cpp"
         info "仍可使用：離線模式、Moonshine 即時辨識、GPU 伺服器 即時辨識"
+    }
+}
+
+# ═══════════════════════════════════════════════════════════════
+# 5b. faster-whisper 模型預下載
+# ═══════════════════════════════════════════════════════════════
+
+section "faster-whisper 模型預下載（large-v3-turbo）"
+
+$fwModelFound = & $VENV_PYTHON -c @"
+import os
+found = False
+dirs = []
+try:
+    from huggingface_hub.constants import HF_HUB_CACHE
+    dirs.append(HF_HUB_CACHE)
+except: pass
+default = os.path.join(os.path.expanduser('~'), '.cache', 'huggingface', 'hub')
+if default not in dirs:
+    dirs.append(default)
+for d in dirs:
+    for prefix in ['Systran', 'mobiuslabsgmbh']:
+        if os.path.isdir(os.path.join(d, 'models--' + prefix + '--faster-whisper-large-v3-turbo')):
+            found = True
+            break
+    if found:
+        break
+print('found' if found else 'notfound')
+"@ 2>$null
+
+if ($fwModelFound -eq "found") {
+    check_ok "faster-whisper 模型 large-v3-turbo 已存在"
+} else {
+    info "下載 faster-whisper large-v3-turbo 模型（約 1.6GB）..."
+    & $VENV_PYTHON -m pip install --disable-pip-version-check -q huggingface_hub 2>$null | Out-Null
+    & $VENV_PYTHON -c @"
+from huggingface_hub import snapshot_download
+snapshot_download('Systran/faster-whisper-large-v3-turbo')
+print('OK')
+"@ 2>&1 | Out-Null
+
+    # 驗證下載
+    $fwVerify = & $VENV_PYTHON -c @"
+import os
+found = False
+dirs = []
+try:
+    from huggingface_hub.constants import HF_HUB_CACHE
+    dirs.append(HF_HUB_CACHE)
+except: pass
+default = os.path.join(os.path.expanduser('~'), '.cache', 'huggingface', 'hub')
+if default not in dirs:
+    dirs.append(default)
+for d in dirs:
+    for prefix in ['Systran', 'mobiuslabsgmbh']:
+        if os.path.isdir(os.path.join(d, 'models--' + prefix + '--faster-whisper-large-v3-turbo')):
+            found = True
+            break
+    if found:
+        break
+print('found' if found else 'notfound')
+"@ 2>$null
+
+    if ($fwVerify -eq "found") {
+        check_ok "faster-whisper 模型 large-v3-turbo 安裝完成"
+    } else {
+        check_notice "faster-whisper 模型下載失敗，可稍後在有網路時重新執行安裝"
     }
 }
 
@@ -2105,8 +2173,31 @@ Write-Host ""
 # 功能對照表
 Write-Host "${C_WHITE}  可用功能：${NC}"
 
+# 檢查 faster-whisper 模型是否已下載
+$fwModelOk = (& $VENV_PYTHON -c @"
+import os
+found = False
+dirs = []
+try:
+    from huggingface_hub.constants import HF_HUB_CACHE
+    dirs.append(HF_HUB_CACHE)
+except: pass
+default = os.path.join(os.path.expanduser('~'), '.cache', 'huggingface', 'hub')
+if default not in dirs:
+    dirs.append(default)
+for d in dirs:
+    for prefix in ['Systran', 'mobiuslabsgmbh']:
+        if os.path.isdir(os.path.join(d, 'models--' + prefix + '--faster-whisper-large-v3-turbo')):
+            found = True
+            break
+    if found:
+        break
+print('found' if found else '')
+"@ 2>$null) -eq "found"
+
 $features = @(
     @{ OK = (venv_import_ok "faster_whisper"); Desc = "離線音訊處理 (--input)"; Engine = "faster-whisper" },
+    @{ OK = $fwModelOk;                        Desc = "Whisper 模型 large-v3-turbo"; Engine = "faster-whisper 格式" },
     @{ OK = (venv_import_ok "resemblyzer");    Desc = "AI 講者辨識 (--diarize)"; Engine = "resemblyzer" },
     @{ OK = (venv_import_ok "argostranslate"); Desc = "Argos 離線翻譯";          Engine = "僅英翻中" },
     @{ OK = (Test-Path (Join-Path $env:LOCALAPPDATA "jt-live-whisper\models\nllb-600m\model.bin")); Desc = "NLLB 離線翻譯"; Engine = "中日英互譯" },

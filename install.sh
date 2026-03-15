@@ -61,7 +61,7 @@ exec > >(tee -a "$INSTALL_LOG") 2>&1
 # 偵測 ARM Homebrew Python（Moonshine 需要 ARM64 原生 Python）
 if [ -x "/opt/homebrew/bin/python3.12" ]; then
     PYTHON_CMD="/opt/homebrew/bin/python3.12"
-elif command -v python3.12 &>/dev/null; then
+elif command -v python3.12 &>/dev/null && python3.12 --version &>/dev/null 2>&1; then
     PYTHON_CMD="python3.12"
 else
     PYTHON_CMD="python3"
@@ -141,7 +141,7 @@ spinner_stop() {
 print_title() {
     echo ""
     echo -e "${C_TITLE}============================================================${NC}"
-    echo -e "${C_TITLE}${BOLD}  jt-live-whisper v2.7.2 - 100% 全地端 AI 語音工具集 - 安裝程式${NC}"
+    echo -e "${C_TITLE}${BOLD}  jt-live-whisper v2.11.1 - 100% 全地端 AI 語音工具集 - 安裝程式${NC}"
     echo -e "${C_TITLE}  by Jason Cheng (Jason Tools)${NC}"
     echo -e "${C_TITLE}============================================================${NC}"
     echo ""
@@ -409,18 +409,35 @@ check_python() {
     # Intel Mac：用一般 Python（需要 >= 3.9，ctranslate2 不支援 3.8）
     local need_py_install=0
     if command -v "$PYTHON_CMD" &>/dev/null; then
-        local py_ver_num
-        py_ver_num=$("$PYTHON_CMD" -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>/dev/null)
-        local py_minor
-        py_minor=$("$PYTHON_CMD" -c "import sys; print(sys.version_info.minor)" 2>/dev/null)
-        if [ -n "$py_minor" ] && [ "$py_minor" -lt 9 ] 2>/dev/null; then
-            echo -e "  ${C_WARN}[偵測]${NC} $PYTHON_CMD 版本 $py_ver_num 過舊（需要 >= 3.9），嘗試安裝 Python 3.12..."
+        # pyenv shim 偵測：指令存在但無法實際執行
+        if ! "$PYTHON_CMD" --version &>/dev/null 2>&1; then
+            if command -v pyenv &>/dev/null; then
+                local _pyenv_avail
+                _pyenv_avail=$(pyenv versions --bare 2>/dev/null | grep '^3\.\(1[2-9]\|[2-9][0-9]\)' | head -5 | tr '\n' ' ')
+                echo -e "  ${C_WARN}[偵測]${NC} 偵測到 pyenv，但 ${BOLD}$PYTHON_CMD${NC} 未設定可用版本。"
+                if [ -n "$_pyenv_avail" ]; then
+                    echo -e "  ${C_WARN}       請先執行: ${BOLD}pyenv shell ${_pyenv_avail%% *}${NC} 後重新安裝"
+                else
+                    echo -e "  ${C_WARN}       請先執行: ${BOLD}pyenv install 3.12 && pyenv shell 3.12${NC} 後重新安裝"
+                fi
+                check_fail "pyenv Python 版本未設定"
+                return 1
+            fi
             need_py_install=1
         else
-            local ver
-            ver=$("$PYTHON_CMD" --version 2>&1)
-            check_ok "$ver ($PYTHON_CMD)"
-            return 0
+            local py_ver_num
+            py_ver_num=$("$PYTHON_CMD" -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>/dev/null)
+            local py_minor
+            py_minor=$("$PYTHON_CMD" -c "import sys; print(sys.version_info.minor)" 2>/dev/null)
+            if [ -n "$py_minor" ] && [ "$py_minor" -lt 9 ] 2>/dev/null; then
+                echo -e "  ${C_WARN}[偵測]${NC} $PYTHON_CMD 版本 $py_ver_num 過舊（需要 >= 3.9），嘗試安裝 Python 3.12..."
+                need_py_install=1
+            else
+                local ver
+                ver=$("$PYTHON_CMD" --version 2>&1)
+                check_ok "$ver ($PYTHON_CMD)"
+                return 0
+            fi
         fi
     else
         need_py_install=1
@@ -709,6 +726,9 @@ check_venv() {
     if ! python3 -c "import spectralcluster" &>/dev/null 2>&1; then
         missing_pkgs+=("spectralcluster")
     fi
+    if ! python3 -c "import noisereduce" &>/dev/null 2>&1; then
+        missing_pkgs+=("noisereduce")
+    fi
 
     # 套件中文說明對照（pip 套件名 → 說明）
     _pkg_label() {
@@ -721,6 +741,7 @@ check_venv() {
             faster-whisper)            echo "faster-whisper（離線語音辨識）" ;;
             resemblyzer)               echo "resemblyzer（講者辨識 - 聲紋提取）" ;;
             spectralcluster)           echo "spectralcluster（講者辨識 - 分群）" ;;
+            noisereduce)               echo "noisereduce（背景降噪）" ;;
             *)                         echo "$1" ;;
         esac
     }
@@ -735,6 +756,7 @@ check_venv() {
             faster_whisper) echo "faster-whisper（離線語音辨識）" ;;
             resemblyzer)    echo "resemblyzer（講者辨識 - 聲紋提取）" ;;
             spectralcluster) echo "spectralcluster（講者辨識 - 分群）" ;;
+            noisereduce)    echo "noisereduce（背景降噪）" ;;
             *)              echo "$1" ;;
         esac
     }
@@ -756,7 +778,7 @@ check_venv() {
         done
         # 驗證（用 import 名稱，不是 pip 套件名稱）
         local all_ok=1
-        for pkg in ctranslate2 sentencepiece opencc sounddevice numpy faster_whisper resemblyzer spectralcluster; do
+        for pkg in ctranslate2 sentencepiece opencc sounddevice numpy faster_whisper resemblyzer spectralcluster noisereduce; do
             local label
             label="$(_import_label "$pkg")"
             if python3 -c "import $pkg" &>/dev/null 2>&1; then
@@ -767,7 +789,7 @@ check_venv() {
             fi
         done
     else
-        for pkg in ctranslate2 sentencepiece opencc sounddevice numpy faster_whisper resemblyzer spectralcluster; do
+        for pkg in ctranslate2 sentencepiece opencc sounddevice numpy faster_whisper resemblyzer spectralcluster noisereduce; do
             local label
             label="$(_import_label "$pkg")"
             check_ok "${label}（已安裝）"
@@ -917,6 +939,190 @@ print('OK')
             echo -e "  ${C_DIM}  請確認網路連線後重新執行安裝${NC}"
         fi
     fi
+}
+
+# ─── faster-whisper 模型預下載 ──────────────────────────────
+check_faster_whisper_model() {
+    # Apple Silicon → large-v3-turbo（Metal 加速）、Intel → small（CPU 夠用）
+    local fw_model
+    if [ "$(uname -m)" = "arm64" ]; then
+        fw_model="large-v3-turbo"
+    else
+        fw_model="small"
+    fi
+
+    # bash 3.2 (macOS) bug: 全形括號（）內嵌變數會截斷，需拼接繞過
+    _fw_section="faster-whisper 模型預下載"
+    _fw_section="${_fw_section}（${fw_model}）"
+    section "$_fw_section"
+
+    source "$VENV_DIR/bin/activate"
+
+    # 確保 huggingface_hub 已安裝
+    pip install --disable-pip-version-check -q huggingface_hub 2>/dev/null
+
+    local fw_found
+    fw_found=$(python3 -c "
+import os
+found = False
+dirs = []
+try:
+    from huggingface_hub.constants import HF_HUB_CACHE
+    dirs.append(HF_HUB_CACHE)
+except: pass
+default = os.path.join(os.path.expanduser('~'), '.cache', 'huggingface', 'hub')
+if default not in dirs:
+    dirs.append(default)
+for d in dirs:
+    for prefix in ['Systran', 'mobiuslabsgmbh']:
+        if os.path.isdir(os.path.join(d, 'models--' + prefix + '--faster-whisper-$fw_model')):
+            found = True
+            break
+    if found:
+        break
+print('found' if found else 'notfound')
+" 2>/dev/null)
+
+    if [ "$fw_found" = "found" ]; then
+        check_ok "faster-whisper 模型 $fw_model 已存在"
+    else
+        local fw_size
+        if [ "$fw_model" = "large-v3-turbo" ]; then
+            fw_size="約 1.6GB"
+        else
+            fw_size="約 500MB"
+        fi
+        check_install "正在下載 faster-whisper $fw_model 模型（$fw_size）..."
+        echo ""
+        run_spinner "下載模型..." python3 -c "
+from huggingface_hub import snapshot_download
+snapshot_download('Systran/faster-whisper-$fw_model')
+print('OK')
+"
+        echo ""
+
+        # 驗證下載
+        fw_found=$(python3 -c "
+import os
+found = False
+dirs = []
+try:
+    from huggingface_hub.constants import HF_HUB_CACHE
+    dirs.append(HF_HUB_CACHE)
+except: pass
+default = os.path.join(os.path.expanduser('~'), '.cache', 'huggingface', 'hub')
+if default not in dirs:
+    dirs.append(default)
+for d in dirs:
+    for prefix in ['Systran', 'mobiuslabsgmbh']:
+        if os.path.isdir(os.path.join(d, 'models--' + prefix + '--faster-whisper-$fw_model')):
+            found = True
+            break
+    if found:
+        break
+print('found' if found else 'notfound')
+" 2>/dev/null)
+
+        if [ "$fw_found" = "found" ]; then
+            check_ok "faster-whisper 模型 $fw_model 安裝完成"
+        else
+            check_fail "faster-whisper 模型下載失敗"
+            echo -e "  ${C_DIM}  請確認網路連線後重新執行安裝${NC}"
+        fi
+    fi
+
+    deactivate
+}
+
+# ─── MLX Whisper（僅 Apple Silicon）────────────────
+check_mlx_whisper() {
+    # 僅 ARM64 Mac，Intel 跳過
+    if [ "$(uname -m)" != "arm64" ]; then
+        return 0
+    fi
+
+    section "MLX Whisper（Apple Silicon GPU 加速）"
+
+    source "$VENV_DIR/bin/activate"
+
+    # 安裝 mlx-whisper（含 MLX 框架，首次安裝需較長時間）
+    if python3 -c "import mlx_whisper" &>/dev/null 2>&1; then
+        check_ok "mlx-whisper 已安裝"
+    else
+        check_install "正在安裝 mlx-whisper（含 MLX 框架，首次約需 3-5 分鐘）..."
+        echo ""
+        run_spinner "安裝 mlx-whisper..." pip install --disable-pip-version-check mlx-whisper
+        echo ""
+        if python3 -c "import mlx_whisper" &>/dev/null 2>&1; then
+            check_ok "mlx-whisper 安裝完成"
+        else
+            check_fail "mlx-whisper 安裝失敗"
+            deactivate
+            return 0
+        fi
+    fi
+
+    # 檢查 MLX 格式模型（large-v3-turbo）
+    local mlx_model="large-v3-turbo"
+    local mlx_found
+    mlx_found=$(python3 -c "
+import os
+found = False
+dirs = []
+try:
+    from huggingface_hub.constants import HF_HUB_CACHE
+    dirs.append(HF_HUB_CACHE)
+except: pass
+default = os.path.join(os.path.expanduser('~'), '.cache', 'huggingface', 'hub')
+if default not in dirs:
+    dirs.append(default)
+for d in dirs:
+    if os.path.isdir(os.path.join(d, 'models--mlx-community--whisper-$mlx_model')):
+        found = True
+        break
+print('found' if found else 'notfound')
+" 2>/dev/null)
+
+    if [ "$mlx_found" = "found" ]; then
+        check_ok "MLX Whisper 模型 $mlx_model 已存在"
+    else
+        check_install "正在下載 MLX Whisper $mlx_model 模型（約 1.6GB）..."
+        echo ""
+        run_spinner "下載模型..." python3 -c "
+from huggingface_hub import snapshot_download
+snapshot_download('mlx-community/whisper-$mlx_model')
+print('OK')
+"
+        echo ""
+
+        # 驗證下載
+        mlx_found=$(python3 -c "
+import os
+found = False
+dirs = []
+try:
+    from huggingface_hub.constants import HF_HUB_CACHE
+    dirs.append(HF_HUB_CACHE)
+except: pass
+default = os.path.join(os.path.expanduser('~'), '.cache', 'huggingface', 'hub')
+if default not in dirs:
+    dirs.append(default)
+for d in dirs:
+    if os.path.isdir(os.path.join(d, 'models--mlx-community--whisper-$mlx_model')):
+        found = True
+        break
+print('found' if found else 'notfound')
+" 2>/dev/null)
+
+        if [ "$mlx_found" = "found" ]; then
+            check_ok "MLX Whisper 模型 $mlx_model 安裝完成"
+        else
+            check_fail "MLX Whisper 模型下載失敗"
+            echo -e "  ${C_DIM}  請確認網路連線後重新執行安裝${NC}"
+        fi
+    fi
+
+    deactivate
 }
 
 # ─── 升級 ────────────────────────────────────────
@@ -2093,6 +2299,40 @@ print_summary() {
         echo -e "  ${C_DIM}□ 離線音訊處理 (--input)  faster-whisper${NC}"
     fi
 
+    # faster-whisper 模型
+    local _fw_model
+    if [ "$(uname -m)" = "arm64" ]; then
+        _fw_model="large-v3-turbo"
+    else
+        _fw_model="small"
+    fi
+    local _fw_model_found
+    _fw_model_found=$(python3 -c "
+import os
+found = False
+dirs = []
+try:
+    from huggingface_hub.constants import HF_HUB_CACHE
+    dirs.append(HF_HUB_CACHE)
+except: pass
+default = os.path.join(os.path.expanduser('~'), '.cache', 'huggingface', 'hub')
+if default not in dirs:
+    dirs.append(default)
+for d in dirs:
+    for prefix in ['Systran', 'mobiuslabsgmbh']:
+        if os.path.isdir(os.path.join(d, 'models--' + prefix + '--faster-whisper-' + '$_fw_model')):
+            found = True
+            break
+    if found:
+        break
+print('found' if found else '')
+" 2>/dev/null)
+    if [ -n "$_fw_model_found" ]; then
+        echo -e "  ${C_OK}■${NC} Whisper 模型 $_fw_model  ${C_DIM}faster-whisper 格式${NC}"
+    else
+        echo -e "  ${C_DIM}□ Whisper 模型 $_fw_model  faster-whisper 格式${NC}"
+    fi
+
     # resemblyzer
     if python3 -c "import resemblyzer" &>/dev/null 2>&1; then
         echo -e "  ${C_OK}■${NC} AI 講者辨識 (--diarize)  ${C_DIM}resemblyzer${NC}"
@@ -2128,6 +2368,15 @@ print_summary() {
         echo -e "  ${C_OK}■${NC} Whisper 本機即時辨識  ${C_DIM}whisper.cpp${NC}"
     else
         echo -e "  ${C_DIM}□ Whisper 本機即時辨識  whisper.cpp${NC}"
+    fi
+
+    # MLX Whisper（僅 ARM64）
+    if [ "$(uname -m)" = "arm64" ]; then
+        if python3 -c "import mlx_whisper" &>/dev/null 2>&1; then
+            echo -e "  ${C_OK}■${NC} MLX Whisper 即時辨識  ${C_DIM}Apple Silicon GPU 加速${NC}"
+        else
+            echo -e "  ${C_DIM}□ MLX Whisper 即時辨識  Apple Silicon GPU 加速${NC}"
+        fi
     fi
 
     # GPU 伺服器
@@ -2225,5 +2474,7 @@ check_venv
 check_moonshine
 check_argos_model
 check_nllb_model
+check_faster_whisper_model
+check_mlx_whisper
 setup_remote_whisper
 print_summary

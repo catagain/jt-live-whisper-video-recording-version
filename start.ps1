@@ -97,7 +97,7 @@ $banner_line = '=' * $cols
 
 Write-Host ""
 Write-Host "${C_TITLE}${banner_line}${NC}"
-Write-Host "${C_TITLE}${BOLD}  jt-live-whisper v2.7.2 - 100% 全地端 AI 語音工具集${NC}"
+Write-Host "${C_TITLE}${BOLD}  jt-live-whisper v2.11.0 - 100% 全地端 AI 語音工具集${NC}"
 Write-Host "${C_TITLE}  by Jason Cheng (Jason Tools)${NC}"
 Write-Host "${C_TITLE}${banner_line}${NC}"
 Write-Host ""
@@ -124,8 +124,15 @@ $runningPy = Get-CimInstance Win32_Process -Filter "Name='python.exe'" -ErrorAct
 if ($runningPy) {
     Write-Host "${C_WARN}[警告] translate_meeting.py 已在執行中（PID: $(($runningPy | ForEach-Object { $_.ProcessId }) -join ', ')）${NC}"
     Write-Host "${C_WHITE}同時執行多個實例可能導致音訊裝置衝突${NC}"
-    $ans = Read-Host "  是否仍然繼續？(y/N)"
-    if ($ans -ne 'y' -and $ans -ne 'Y') {
+    $ans = Read-Host "  是否仍然繼續？(y/N/k=終止舊程序)"
+    if ($ans -eq 'k' -or $ans -eq 'K') {
+        foreach ($proc in $runningPy) {
+            try { Stop-Process -Id $proc.ProcessId -Force -ErrorAction Stop
+                  Write-Host "${C_OK}  已終止 PID $($proc.ProcessId)${NC}" }
+            catch { Write-Host "${C_ERR}  無法終止 PID $($proc.ProcessId)${NC}" }
+        }
+        Start-Sleep -Milliseconds 500
+    } elseif ($ans -ne 'y' -and $ans -ne 'Y') {
         $updateJob | Remove-Job -Force -ErrorAction SilentlyContinue
         exit 0
     }
