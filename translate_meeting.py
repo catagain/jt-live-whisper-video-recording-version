@@ -661,7 +661,7 @@ ASR_ENGINES = [
     ("moonshine", "Moonshine", "真串流，低延遲，僅英文"),
 ]
 
-APP_VERSION = "2.11.1"
+APP_VERSION = "2.11.2"
 
 # 常見 LLM 伺服器預設 port（供參考）
 LLM_PRESETS = [

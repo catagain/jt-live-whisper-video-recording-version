@@ -252,7 +252,7 @@ $banner_line = '=' * $cols
 
 Write-Host ""
 Write-Host "${C_TITLE}${banner_line}${NC}"
-Write-Host "${C_TITLE}${BOLD}  jt-live-whisper v2.11.0 - 100% 全地端 AI 語音工具集 - Windows 安裝程式${NC}"
+Write-Host "${C_TITLE}${BOLD}  jt-live-whisper v2.11.2 - 100% 全地端 AI 語音工具集 - Windows 安裝程式${NC}"
 Write-Host "${C_TITLE}  by Jason Cheng (Jason Tools)${NC}"
 Write-Host "${C_TITLE}${banner_line}${NC}"
 Write-Host ""
@@ -504,6 +504,15 @@ if (cmd_exists "nvidia-smi") {
 
             check_ok "NVIDIA GPU: ${GPU_NAME} ($([math]::Round($GPU_MEMORY_MB/1024,1)) GB)"
             check_ok "CUDA 驅動: ${CUDA_VERSION}"
+
+            # CUDA 13+ 警告：faster-whisper (CTranslate2) 需要 CUDA 12.x 的 cublas64_12.dll
+            if ($CUDA_VERSION -match "^1[3-9]\.") {
+                check_notice "CUDA ${CUDA_VERSION} 偵測到 — faster-whisper 需要 CUDA 12.x 程式庫"
+                info "  faster-whisper 使用的 CTranslate2 需要 cublas64_12.dll（CUDA 12.x）"
+                info "  請另外安裝 CUDA Toolkit 12.8（可與 13.x 並存）："
+                info "  https://developer.nvidia.com/cuda-12-8-0-download-archive"
+                info "  否則會出現「Library cublas64_12.dll is not found」錯誤"
+            }
 
             # 對應 PyTorch CUDA wheel 版本
             if     ($CUDA_VERSION -match "^12\.[4-9]|^1[3-9]") { $TORCH_CUDA_TAG = "cu124" }
