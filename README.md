@@ -152,17 +152,23 @@ Author: Jason Cheng (Jason Tools)
 - **自動偵測 LLM 伺服器**：支援 Ollama、LM Studio、Jan.ai、vLLM、LocalAI、llama.cpp、LiteLLM 等本地端 LLM 伺服器
 - **互動式選單 + CLI 模式**：新手友善的選單介面，進階用戶可用命令列參數直接啟動
 - **WebUI 瀏覽器介面**：`./start.sh --webui` 在瀏覽器中操作所有功能，支援即時字幕、離線處理、講者辨識、摘要，手機/平板也可使用
-- **字幕轉發**：即時字幕自動轉發到 Telegram / Slack / Discord / Teams / LINE / Nextcloud Talk / 通用 API，可同時多平台
-- **懸浮字幕**（感謝 OSSLab 熊大提供建議）：桌面半透明字幕覆蓋視窗（PyQt6），可疊加於任何應用程式上方，字體自動縮放、可拖曳定位
-- **關鍵字即時通知**：設定關鍵字，出現時全螢幕警示特效 + 瀏覽器推播 + 音效（警示/柔和可選）+ 懸浮字幕閃爍。可用於追蹤會議重點、開會時提醒你留意關鍵議題，或線上課程摸魚時讓系統在「請實作」「這個會考」時自動提醒
+- **關鍵字即時通知**：設定關鍵字，即時辨識出現時自動發出通知。可用於追蹤會議重點、開會時提醒留意關鍵議題，或線上課程摸魚時讓系統在「請實作」「這個會考」時自動提醒。支援全螢幕警示特效、瀏覽器推播、音效提示（警示/柔和可選）、懸浮字幕閃爍，同一關鍵字冷卻機制避免重複通知
+- **字幕轉發**：即時字幕自動轉發到通訊平台（Telegram / Slack / Discord / Teams / LINE / Nextcloud Talk / 通用 API），可同時啟用多個平台、自訂發送間隔與內容（含時間/原文/譯文）。通用 API 支援 Body 範本（`{{text}}` 變數）搭配自訂 Headers
+- **懸浮字幕**（感謝 OSSLab 熊大提供建議）：桌面半透明字幕覆蓋視窗（PyQt6），可疊加於任何應用程式上方。字體依視窗大小自動縮放、可拖曳移動與調整大小、滑鼠穿透模式、字幕切換淡入淡出動畫。單語/雙語自動切換高度
+
+**關鍵字即時通知** — 設定關鍵字後，辨識結果出現時全螢幕警示 + 音效提醒：
 
 ![關鍵字通知效果](images/keyword-alert.png)
 
 ![關鍵字通知設定](images/keyword-alert-settings.png)
 
+**懸浮字幕** — 半透明覆蓋視窗，疊加於任何應用程式上方：
+
 ![懸浮字幕效果](images/subtitle-overlay.png)
 
 ![懸浮字幕設定](images/subtitle-overlay-settings.png)
+
+**字幕轉發** — 即時字幕自動轉發到 Telegram 等通訊平台：
 
 ![字幕轉發設定](images/forward-telegram-settings.png)
 
