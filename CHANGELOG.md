@@ -1,32 +1,81 @@
 # Changelog
 
-### v2.14.8 (2026-03-20)
+### v2.15.3 (2026-03-22)
 
 **新功能**
-- 純轉錄模式（英文/中文/日文）支援 LLM 自動校正逐字稿：有設定 LLM 伺服器時自動啟用，修正 ASR 辨識錯字
-- 離線處理摘要選項新增「只校正逐字稿（不產出摘要）」，可獨立使用 LLM 校正功能
-- CLI 模式純轉錄自動偵測 LLM：有 config.json LLM 設定即自動連線校正，無需額外參數
-- WebUI 離線處理完成時顯示產出檔案連結（膠囊按鈕，分類標籤：摘要/逐字/字幕），可直接點擊開啟
-- WebUI 離線處理完成新增「開啟資料夾」按鈕，直接在 Finder / Explorer 開啟 session 目錄
-- webui.py 新增 `/logs/` 靜態檔案服務 + `/api/open-folder` API
+- 關鍵字即時通知：設定關鍵字，即時辨識出現時自動通知。可用於追蹤會議重點、開會時提醒留意關鍵議題，或線上課程摸魚時讓系統在講師說到「請實作」「這個會考」時自動提醒
+  - WebUI 全螢幕警示特效（紅金交替閃爍 + 中央大字 ⚠ 脈衝動畫，遊戲風格）
+  - 瀏覽器桌面推播通知（Notification API，即使在背景也看得到）
+  - WebUI 音效提示，可選兩種風格：警示音（核爆風格低頻嗡鳴+高低交替警報）或柔和音（三連遞增音）
+  - 懸浮字幕視窗邊框金黃色閃爍（3 次閃爍動畫）
+  - 同一關鍵字冷卻機制（可設定秒數，預設 30 秒內不重複通知）
+  - 不分大小寫，同時比對原文和譯文，關鍵字前後空格自動去除
+  - WebUI 訊息列顯示金黃色關鍵字提醒標記
+- WebUI 新增「關鍵通知」設定區塊（僅本機顯示）：關鍵字輸入、冷卻時間、通知方式開關、音效風格選擇
+- 字幕轉發功能：即時字幕自動轉發到通訊平台，每隔指定秒數發送一次累積字幕
+  - 支援 7 個平台：Telegram（Bot API）、Slack（Webhook）、Discord（Webhook，自動分段 2000 字）、Teams（Webhook）、LINE（Messaging API）、Nextcloud Talk（OCS API）、通用 API（自訂 URL + Body 範本）
+  - 可同時啟用多個平台，各自獨立設定認證資訊
+  - 發送間隔可調（最低 5 秒），段落間自動空行分隔
+  - 可選擇發送內容：含時間戳 / 含原文 / 含譯文（預設原文+譯文）
+  - 通用 API 支援 Body 範本：用 `{{text}}` 變數代入字幕，填 JSON 格式自動設定 Content-Type，可搭配自訂 Headers（如 Authorization）
+  - 設定存於 config.json `subtitle_forward`，下次啟動自動生效
+- WebUI 新增「字幕轉發」設定區塊（僅本機顯示）
+  - 各平台卡片含品牌色 icon（Telegram 藍、Slack 多色、Discord 紫、Teams 紫、LINE 綠、Nextcloud 藍、通用 API 程式碼 icon）
+  - 「儲存設定」+「測試發送」按鈕，測試發送會逐一驗證所有已啟用平台
+- 即時模式上方狀態列新增「轉發」膠囊（青色，顯示已啟用的平台名稱如「轉發 TG+Discord」）
+- 懸浮字幕功能：桌面半透明字幕覆蓋視窗（PyQt6），可疊加於任何應用程式上方（感謝 OSSLab 熊大提供建議）
+  - 字體依視窗大小自動縮放，最小不低於下限，容不下則換行
+  - 可拖曳定位、位置自動記憶、滑鼠穿透模式
+  - 系統匣圖示右鍵選單、字幕切換淡入淡出動畫、永遠置頂
+  - macOS 原生視窗層級（NSStatusWindowLevel）確保在所有視窗之上
+  - 啟動時自動清除前次殘留程序，程式結束時一併終止（含 Ctrl+C / os._exit）
+- WebUI 新增「懸浮字幕」設定區塊（僅本機顯示）：透明度 slider、滑鼠穿透、純轉錄單行
+- 純轉錄模式（英文/中文/日文）支援 LLM 自動校正逐字稿：有設定 LLM 伺服器時自動啟用
+- 離線處理摘要選項新增「只校正逐字稿（不產出摘要）」
+- 離線處理可選是否產生 SRT / VTT 字幕檔（WebUI checkbox）
+- WebUI 離線處理完成時顯示產出檔案連結（膠囊按鈕）+ 「開啟資料夾」按鈕
 - 離線處理新增 VTT (WebVTT) 字幕檔輸出（與 SRT 同時產出）
-- 時間逐字稿 / 摘要 HTML footer 新增 VTT 字幕連結
-- LLM 校正逐字稿串流即時推送：校正結果逐行送到 WebUI 即時顯示
-- WebUI 設定頁 ↔ 字幕頁加入滑動淡入淡出轉場動畫
+- LLM 校正逐字稿串流即時推送：校正結果逐行送到 WebUI
+- WebUI 設定頁 ↔ 字幕頁滑動淡入淡出轉場動畫
+- WebUI 所有設定區塊支援收摺/展開（點按標題列）
+- WebUI 載入時顯示各步驟進度文字
+- install.sh / install.ps1 新增 PyQt6 必裝項目（懸浮字幕用）
+- 計時器從狀態列移至頂端標題列
 
 **改進**
-- WebUI「離線處理選項」標題精簡為「離線處理」（統一四字）
-- WebUI「摘要模型」標籤改為「摘要 / 校正模型」
-- WebUI 底部控制列 `.bar>div` 加 `display:flex; align-items:center` 修正垂直置中
-- 摘要 prompt 明確要求校正逐字稿分段（每段 3-8 句，話題轉換換段）
-- 摘要 HTML 渲染加 fallback：超過 500 字的段落自動每 5 句分段
+- WebUI 設定頁標題改為「開始使用」（火箭 icon）
+- WebUI「離線處理選項」精簡為「離線處理」
+- WebUI「摘要模型」改為「摘要 / 校正模型」、「產生摘要」改為「產生摘要與校正逐字稿」
+- WebUI 底部控制列垂直置中
+- 摘要 prompt 要求校正逐字稿分段（每段 3-8 句）
+- 摘要 HTML 超長段落自動每 5 句分段
+- 懸浮字幕不顯示語言標籤（[EN] [中]），直接顯示原文和譯文
+- 按「開始」時自動儲存字幕轉發、關鍵通知、懸浮字幕的啟用狀態（不需另外按儲存）
+- 字型改用系統預設（避免 macOS 搜尋 Microsoft JhengHei 耗時 300ms+）
+- WebUI 標題列計時器改為七段顯示器風格（LED 青色光暈 + 暗影底字 + 漸層背景），超過 1 小時自動切換 H:MM:SS 格式
+- WebUI 標題列移除句數顯示（第二列已有）
+- WebUI 辨識模型下拉選單智慧提示：不支援的 .en 模型自動停用、效能不足的模型標示「此裝置速度可能較慢」
+- install.ps1 whisper.cpp 模型 large-v3-turbo 改為自動下載（多語言辨識必備）
+- 懸浮字幕單語模式自動縮短高度（42px），動態偵測雙語切換（80px），單語時隱藏空白原文行
+- 懸浮字幕支援拖拉改變視窗大小（邊緣游標自動變化），X 按鈕隨 resize 更新位置
+- 懸浮字幕外框間距縮減（更緊湊）
+- 字幕轉發 / 懸浮字幕 SSL 憑證驗證失敗時自動停用驗證重試（企業網路相容）
 
 **修正**
-- install.ps1 whisper.cpp 編譯：非 CUDA 模式明確設定 `-DGGML_CUDA=OFF`（避免 cmake 自動偵測 nvcc 導致失敗）
-- install.ps1 whisper.cpp CUDA 編譯失敗自動降級 CPU：擴大偵測範圍（含 cmake 自動偵測 CUDA 的失敗情境）
-- install.ps1 CUDA Toolkit 偵測改用 nvcc.exe 驗證（不再僅檢查目錄存在）
+- 懸浮字幕 crossfade 動畫堆疊：快速更新字幕時先停止舊動畫再啟動新動畫
+- 懸浮字幕 flash border timer 堆疊：快速觸發關鍵字時先停止舊 timer
+- WebUI 收摺動畫快速連按 race condition：動畫期間忽略重複操作
+- webui.py `_monitor` thread race condition：用本地變數保留程序參照避免 AttributeError
+- translate_meeting.py overlay atexit lambda 改用全域 `_overlay_proc_ref` 避免殘留程序
+- webui.py 停止時一併終止懸浮字幕子程序
+- webui.py Ctrl+C 強制退出（signal handler 直接 os._exit）
+- install.ps1 whisper.cpp 編譯：非 CUDA 模式明確設定 `-DGGML_CUDA=OFF`
+- install.ps1 whisper.cpp CUDA 編譯失敗自動降級 CPU：擴大偵測範圍
+- install.ps1 CUDA Toolkit 偵測改用 nvcc.exe 驗證
 - LLM 校正逐字稿翻譯配對保護：原文 [EN] 行有配對譯文時不被誤刪為雜音
 - WebUI 離線處理完成時清空底部狀態列（停止 spinner 旋轉）
+- 中文幻覺過濾新增「字幕by」「字幕BY」
+- WebUI 第一筆字幕到達時自動清除底部「載入中」狀態
 
 ### v2.14.6 (2026-03-20)
 

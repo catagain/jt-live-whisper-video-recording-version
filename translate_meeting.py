@@ -293,9 +293,19 @@ _START_CMD = ".\\start.ps1" if IS_WINDOWS else "./start.sh"
 _INSTALL_CMD = ".\\install.ps1" if IS_WINDOWS else "./install.sh"
 
 
+_overlay_proc_ref = None  # 全域參照，供 _force_exit 使用
+
 def _force_exit(code=0):
     """強制結束程序。一律用 os._exit() 避免卡在 C 擴展（CTranslate2/MLX Metal）。
     signal handler 在呼叫前已完成音訊裝置清理。"""
+    # 結束懸浮字幕子程序（os._exit 不會觸發 atexit）
+    global _overlay_proc_ref
+    if _overlay_proc_ref is not None:
+        try:
+            _overlay_proc_ref.terminate()
+        except Exception:
+            pass
+        _overlay_proc_ref = None
     if not IS_WINDOWS:
         # macOS：殺掉 resource_tracker 子程序，避免 semaphore 洩漏警告
         try:
@@ -614,10 +624,10 @@ _MIC_LANG = {"en2zh": "zh", "zh2en": "en", "ja2zh": "zh", "zh2ja": "ja",
 WHISPER_MODELS = [
     ("base.en", "ggml-base.en.bin", "最快，準確度一般"),
     ("small.en", "ggml-small.en.bin", "快，準確度好"),
-    ("small", "ggml-small.bin", "快，多語言（中日文可用）"),
+    ("small", "ggml-small.bin", "快，中日文可用"),
     ("large-v3-turbo", "ggml-large-v3-turbo.bin", "快，準確度很好"),
     ("medium.en", "ggml-medium.en.bin", "較慢，準確度很好"),
-    ("medium", "ggml-medium.bin", "較慢，多語言（中日文品質較好）"),
+    ("medium", "ggml-medium.bin", "較慢，中日文品質較好"),
     ("large-v3", "ggml-large-v3.bin", "最慢，中日文品質最好，有獨立 GPU 可選用"),
 ]
 
@@ -713,7 +723,7 @@ ASR_ENGINES = [
     ("moonshine", "Moonshine", "真串流，低延遲，僅英文"),
 ]
 
-APP_VERSION = "2.14.8"
+APP_VERSION = "2.15.3"
 
 # ─── WebUI 暫停控制（SIGUSR1 toggle）──────────────────────────────
 _webui_pause_event = None  # 由各 streaming 函式設定
@@ -738,6 +748,10 @@ _webui_queue = None  # queue.Queue，啟用時才建立
 _WEBUI_PORT = 19780
 
 
+_subtitle_forwarder = None  # SubtitleForwarder 實例（啟用時才建立）
+_keyword_monitor = None     # KeywordMonitor 實例（啟用時才建立）
+
+
 def _webui_send(event: dict):
     """非阻塞推送事件到 WebUI（未啟用時直接返回）"""
     if _webui_queue is not None:
@@ -749,6 +763,12 @@ def _webui_send(event: dict):
             _webui_queue.put_nowait(event)
         except Exception:
             pass
+    # 字幕轉發：餵入即時辨識結果
+    if event.get("type") == "transcription" and _subtitle_forwarder is not None:
+        _subtitle_forwarder.feed(event)
+    # 關鍵字通知：檢查是否匹配
+    if event.get("type") == "transcription" and _keyword_monitor is not None:
+        _keyword_monitor.check(event)
 
 
 def _start_webui_sender():
@@ -804,6 +824,257 @@ def _start_webui_sender():
 
     _t = threading.Thread(target=_sender, daemon=True)
     _t.start()
+
+
+# ─── SSL 容錯（企業網路 SSL 中間人憑證）───
+import ssl as _ssl
+_ssl_ctx_noverify = _ssl.create_default_context()
+_ssl_ctx_noverify.check_hostname = False
+_ssl_ctx_noverify.verify_mode = _ssl.CERT_NONE
+
+def _urlopen_safe(req, timeout=10):
+    """urlopen with SSL fallback（SSL 驗證失敗時自動停用驗證重試）"""
+    try:
+        return urllib.request.urlopen(req, timeout=timeout)
+    except Exception as e:
+        if "SSL" in str(e) or "CERTIFICATE" in str(e).upper():
+            return urllib.request.urlopen(req, timeout=timeout, context=_ssl_ctx_noverify)
+        raise
+
+# ─── 字幕轉發（Telegram / Slack / Discord / Teams / 自訂 API）───
+
+class SubtitleForwarder:
+    """即時字幕聚合轉發器：每 N 秒將累積字幕發送到通訊平台"""
+
+    def __init__(self, config: dict):
+        self._interval = max(5, config.get("interval", 10))
+        self._platforms = config.get("platforms", {})
+        self._inc_ts = config.get("include_timestamp", False)
+        self._inc_src = config.get("include_source", True)
+        self._inc_dst = config.get("include_translation", True)
+        self._buffer = []
+        self._lock = threading.Lock()
+        self._timer = None
+        self._active = True
+        self._schedule()
+
+    def feed(self, event: dict):
+        with self._lock:
+            self._buffer.append((
+                event.get("timestamp", ""),
+                event.get("src_lang", ""),
+                event.get("src_text", ""),
+                event.get("dst_lang", ""),
+                event.get("dst_text", ""),
+            ))
+
+    def _schedule(self):
+        if not self._active:
+            return
+        self._timer = threading.Timer(self._interval, self._flush)
+        self._timer.daemon = True
+        self._timer.start()
+
+    def _flush(self):
+        with self._lock:
+            lines = self._buffer[:]
+            self._buffer.clear()
+        if lines:
+            text = self._format(lines)
+            for name, cfg in self._platforms.items():
+                if cfg.get("enabled") and text:
+                    threading.Thread(target=self._send, args=(name, cfg, text),
+                                     daemon=True).start()
+        if self._active:
+            self._schedule()
+
+    def _format(self, lines):
+        parts = []
+        for ts, sl, st, dl, dt in lines:
+            ts_prefix = f"[{ts.strip('[]')}] " if self._inc_ts and ts else ""
+            seg = []
+            if self._inc_src and st:
+                seg.append(f"{ts_prefix}{st}")
+            if self._inc_dst and dt:
+                seg.append(f"{ts_prefix}{dt}")
+            # 至少輸出一行（都沒勾時輸出原文）
+            if not seg and st:
+                seg.append(f"{ts_prefix}{st}")
+            if seg:
+                parts.append("\n".join(seg))
+        return "\n\n".join(parts)
+
+    def _send(self, platform, cfg, text):
+        try:
+            if platform == "telegram":
+                self._send_telegram(cfg, text)
+            elif platform == "slack":
+                self._send_webhook(cfg["webhook_url"], {"text": text})
+            elif platform == "discord":
+                # Discord 2000 字元限制
+                for chunk in self._chunk_text(text, 1990):
+                    self._send_webhook(cfg["webhook_url"], {"content": chunk})
+            elif platform == "teams":
+                self._send_webhook(cfg["webhook_url"], {"text": text})
+            elif platform == "line":
+                self._send_line(cfg, text)
+            elif platform == "nctalk":
+                self._send_nctalk(cfg, text)
+            elif platform == "custom":
+                self._send_custom(cfg, text)
+        except Exception as e:
+            print(f"  [字幕轉發] {platform} 發送失敗: {e}", file=sys.stderr, flush=True)
+
+    def _send_telegram(self, cfg, text):
+        url = f"https://api.telegram.org/bot{cfg['bot_token']}/sendMessage"
+        data = json.dumps({"chat_id": cfg["chat_id"], "text": text}).encode("utf-8")
+        req = urllib.request.Request(url, data=data,
+                                     headers={"Content-Type": "application/json"})
+        _urlopen_safe(req)
+
+    def _send_webhook(self, url, payload):
+        data = json.dumps(payload).encode("utf-8")
+        req = urllib.request.Request(url, data=data,
+                                     headers={"Content-Type": "application/json"})
+        _urlopen_safe(req)
+
+    def _send_line(self, cfg, text):
+        """LINE Messaging API push message"""
+        url = "https://api.line.me/v2/bot/message/push"
+        payload = {
+            "to": cfg["target_id"],
+            "messages": [{"type": "text", "text": text}]
+        }
+        data = json.dumps(payload).encode("utf-8")
+        req = urllib.request.Request(url, data=data, headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {cfg['channel_access_token']}"
+        })
+        _urlopen_safe(req)
+
+    def _send_nctalk(self, cfg, text):
+        """Nextcloud Talk OCS API 發送訊息"""
+        base = cfg["url"].rstrip("/")
+        room = cfg["room_token"]
+        url = f"{base}/ocs/v2.php/apps/spreed/api/v1/chat/{room}"
+        data = json.dumps({"message": text}).encode("utf-8")
+        # Basic auth
+        import base64 as _b64
+        cred = _b64.b64encode(f"{cfg['user']}:{cfg['password']}".encode()).decode()
+        req = urllib.request.Request(url, data=data, headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Basic {cred}",
+            "OCS-APIRequest": "true"
+        })
+        _urlopen_safe(req)
+
+    def _send_custom(self, cfg, text):
+        body_tpl = cfg.get("body_template", "")
+        if body_tpl and "{{text}}" in body_tpl:
+            # JSON 模板：替換 {{text}} 並自動設 Content-Type
+            # 需要 JSON-escape 文字內容（處理換行、引號等）
+            escaped = json.dumps(text)[1:-1]  # 去掉外層引號，保留轉義
+            body = body_tpl.replace("{{text}}", escaped).encode("utf-8")
+            headers = {"Content-Type": "application/json; charset=utf-8"}
+        else:
+            body = text.encode("utf-8")
+            headers = {"Content-Type": "text/plain; charset=utf-8"}
+        headers.update(cfg.get("headers", {}))
+        req = urllib.request.Request(cfg["url"], data=body,
+                                     headers=headers, method="POST")
+        _urlopen_safe(req)
+
+    @staticmethod
+    def _chunk_text(text, max_len):
+        while len(text) > max_len:
+            # 在換行處切割
+            idx = text.rfind("\n", 0, max_len)
+            if idx <= 0:
+                idx = max_len
+            yield text[:idx]
+            text = text[idx:].lstrip("\n")
+        if text:
+            yield text
+
+    def reload(self, config: dict):
+        self._interval = max(5, config.get("interval", 10))
+        self._platforms = config.get("platforms", {})
+        self._inc_ts = config.get("include_timestamp", False)
+        self._inc_src = config.get("include_source", True)
+        self._inc_dst = config.get("include_translation", True)
+
+    def stop(self):
+        self._active = False
+        if self._timer:
+            self._timer.cancel()
+
+
+def _init_subtitle_forwarder():
+    """從 config.json 初始化字幕轉發器"""
+    global _subtitle_forwarder
+    try:
+        fwd_cfg = _config.get("subtitle_forward", {})
+        if fwd_cfg.get("enabled"):
+            has_active = any(p.get("enabled") for p in fwd_cfg.get("platforms", {}).values())
+            if has_active:
+                _subtitle_forwarder = SubtitleForwarder(fwd_cfg)
+                _plat_names = [n for n, p in fwd_cfg.get("platforms", {}).items() if p.get("enabled")]
+                print(f"  [字幕轉發] 已啟用：{', '.join(_plat_names)}，間隔 {fwd_cfg.get('interval', 10)} 秒")
+    except Exception as e:
+        print(f"  [字幕轉發] 初始化失敗: {e}", file=sys.stderr)
+
+
+# ─── 關鍵字即時通知 ──────────────────────────────────────
+
+class KeywordMonitor:
+    """即時辨識結果關鍵字比對，匹配時推送通知事件到 WebUI / 懸浮字幕"""
+
+    def __init__(self, config: dict):
+        self._keywords = [k.strip().lower() for k in config.get("keywords", []) if k.strip()]
+        self._cooldown = max(5, config.get("cooldown", 30))
+        self._browser_notify = config.get("browser_notify", True)
+        self._sound = config.get("sound", True)
+        self._overlay_flash = config.get("overlay_flash", True)
+        self._last_fired = {}  # keyword → timestamp
+
+    def check(self, event: dict):
+        if not self._keywords:
+            return
+        src = (event.get("src_text") or "").lower()
+        dst = (event.get("dst_text") or "").lower()
+        text = src + " " + dst
+        now = time.monotonic()
+
+        for kw in self._keywords:
+            if kw in text:
+                # 冷卻檢查
+                if kw in self._last_fired and now - self._last_fired[kw] < self._cooldown:
+                    continue
+                self._last_fired[kw] = now
+                # 取上下文（原文優先，沒有則用譯文）
+                context = event.get("src_text") or event.get("dst_text") or ""
+                ts = event.get("timestamp", "")
+                _webui_send({
+                    "type": "keyword_alert",
+                    "keyword": kw,
+                    "context": context,
+                    "timestamp": ts,
+                    "browser_notify": self._browser_notify,
+                    "sound": self._sound,
+                    "overlay_flash": self._overlay_flash,
+                })
+
+
+def _init_keyword_monitor():
+    """從 config.json 初始化關鍵字通知"""
+    global _keyword_monitor
+    try:
+        kw_cfg = _config.get("keyword_alert", {})
+        if kw_cfg.get("enabled") and kw_cfg.get("keywords"):
+            _keyword_monitor = KeywordMonitor(kw_cfg)
+            print(f"  [關鍵字通知] 已啟用：{len(kw_cfg['keywords'])} 個關鍵字，冷卻 {kw_cfg.get('cooldown', 30)} 秒")
+    except Exception as e:
+        print(f"  [關鍵字通知] 初始化失敗: {e}", file=sys.stderr)
 
 
 # 常見 LLM 伺服器預設 port（供參考）
@@ -4090,7 +4361,7 @@ def run_stream(capture_id: int, translator, model_name: str, model_path: str,
                         if any(kw in line for kw in (
                             "訂閱", "點贊", "點讚", "轉發", "打賞",
                             "感謝觀看", "謝謝大家", "謝謝收看",
-                            "字幕由", "字幕提供",
+                            "字幕由", "字幕提供", "字幕by", "字幕BY",
                             "獨播", "劇場", "YoYo", "Television Series",
                             "歡迎訂閱", "明鏡", "新聞頻道",
                         )):
@@ -4116,7 +4387,7 @@ def run_stream(capture_id: int, translator, model_name: str, model_path: str,
                         if any(kw in line for kw in (
                             "訂閱", "點贊", "點讚", "轉發", "打賞",
                             "感謝觀看", "謝謝大家", "謝謝收看",
-                            "字幕由", "字幕提供",
+                            "字幕由", "字幕提供", "字幕by", "字幕BY",
                             "獨播", "劇場", "YoYo", "Television Series",
                             "歡迎訂閱", "明鏡", "新聞頻道",
                         )):
@@ -8741,7 +9012,7 @@ def _is_zh_hallucination(text):
         "感謝收聽", "感谢收听", "感謝聆聽", "感谢聆听",
         "喜歡的話", "喜欢的话", "別忘了", "别忘了",
         # 字幕/翻譯歸屬（Amara.org 訓練資料殘留）
-        "字幕由", "字幕提供", "字幕志願", "字幕志愿", "字幕組", "字幕组",
+        "字幕由", "字幕提供", "字幕by", "字幕BY", "字幕志願", "字幕志愿", "字幕組", "字幕组",
         "字幕視聽", "字幕视听", "字幕製作", "字幕制作",
         "翻譯志願", "翻译志愿", "校對志願", "校对志愿",
         "Amara", "amara",
@@ -9188,7 +9459,8 @@ def _segments_to_vtt(segments_data, vtt_path):
 def process_audio_file(input_path, mode, translator, model_size="large-v3-turbo",
                        diarize=False, num_speakers=None, remote_whisper_cfg=None,
                        correct_with_llm=False, llm_model=None, llm_host=None,
-                       llm_port=None, llm_server_type=None, meeting_topic=None):
+                       llm_port=None, llm_server_type=None, meeting_topic=None,
+                       gen_srt=True, gen_vtt=True):
     """處理音訊檔：ffmpeg 轉檔 → faster-whisper 辨識 → 翻譯 → 存檔，回傳 (log_path, html_path, session_dir)"""
     from datetime import datetime
     import shutil
@@ -9591,11 +9863,13 @@ def process_audio_file(input_path, mode, translator, model_size="large-v3-turbo"
         # 產出 SRT / VTT 字幕檔（在 HTML 之前，讓 HTML footer 能偵測到）
         _srt = None
         if segments_data:
-            srt_path = os.path.splitext(log_path)[0] + ".srt"
-            _segments_to_srt(segments_data, srt_path)
-            _srt = srt_path
-            vtt_path = os.path.splitext(log_path)[0] + ".vtt"
-            _segments_to_vtt(segments_data, vtt_path)
+            if gen_srt:
+                srt_path = os.path.splitext(log_path)[0] + ".srt"
+                _segments_to_srt(segments_data, srt_path)
+                _srt = srt_path
+            if gen_vtt:
+                vtt_path = os.path.splitext(log_path)[0] + ".vtt"
+                _segments_to_vtt(segments_data, vtt_path)
 
         if segments_data:
             _transcript_to_html(segments_data, transcript_html_path,
@@ -9652,7 +9926,8 @@ def process_bidi_audio_files(lb_path, mic_path, mode, translator_lb, translator_
                               model_size="large-v3-turbo", remote_whisper_cfg=None,
                               diarize=False, num_speakers=None,
                               correct_with_llm=False, llm_model=None, llm_host=None,
-                              llm_port=None, llm_server_type=None, meeting_topic=None):
+                              llm_port=None, llm_server_type=None, meeting_topic=None,
+                              gen_srt=True, gen_vtt=True):
     """處理雙向錄音檔：兩路 ASR → 合併 → 翻譯 → 存檔，回傳 (log_path, html_path, session_dir)"""
     from datetime import datetime
     import shutil
@@ -10078,11 +10353,13 @@ def process_bidi_audio_files(lb_path, mic_path, mode, translator_lb, translator_
         # SRT / VTT
         _srt = None
         if segments_data:
-            srt_path = os.path.splitext(log_path)[0] + ".srt"
-            _segments_to_srt(segments_data, srt_path)
-            _srt = srt_path
-            vtt_path = os.path.splitext(log_path)[0] + ".vtt"
-            _segments_to_vtt(segments_data, vtt_path)
+            if gen_srt:
+                srt_path = os.path.splitext(log_path)[0] + ".srt"
+                _segments_to_srt(segments_data, srt_path)
+                _srt = srt_path
+            if gen_vtt:
+                vtt_path = os.path.splitext(log_path)[0] + ".vtt"
+                _segments_to_vtt(segments_data, vtt_path)
 
         # 用系統音訊的副本作為 HTML 主音訊
         audio_copy = os.path.join(session_dir, os.path.basename(lb_path))
@@ -11842,8 +12119,17 @@ def parse_args():
         "--local-asr", action="store_true",
         help="強制使用本機 辨識（忽略GPU 伺服器 設定，即時模式與離線模式皆適用）")
     parser.add_argument(
+        "--no-srt", action="store_true",
+        help="離線處理不產生 SRT 字幕檔")
+    parser.add_argument(
+        "--no-vtt", action="store_true",
+        help="離線處理不產生 VTT 字幕檔")
+    parser.add_argument(
         "--restart-server", action="store_true",
         help="強制重啟GPU 伺服器（更新 server.py 後使用）")
+    parser.add_argument(
+        "--subtitle-overlay", action="store_true",
+        help="啟動桌面懸浮字幕覆蓋視窗（需安裝 PyQt6）")
     parser.add_argument(
         "--webui", action="store_true",
         help="同時將即時字幕推送到 WebUI（需另外啟動 webui.py）")
@@ -12015,6 +12301,61 @@ def main():
     # --webui：啟動 event sender（webui.py 由 start.sh 或使用者另外啟動）
     if args.webui:
         _start_webui_sender()
+
+    # 字幕轉發初始化（從 config.json 讀取設定）
+    _init_subtitle_forwarder()
+
+    # 關鍵字通知初始化
+    _init_keyword_monitor()
+
+    # 懸浮字幕覆蓋視窗
+    global _overlay_proc_ref
+    if getattr(args, 'subtitle_overlay', False):
+        _overlay_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "subtitle_overlay.py")
+        if os.path.isfile(_overlay_script):
+            # 清除前次殘留的 overlay 程序
+            try:
+                if IS_WINDOWS:
+                    # Windows: 用 PowerShell 找含 subtitle_overlay.py 的程序並 taskkill
+                    _tl = subprocess.run(
+                        ["powershell", "-NoProfile", "-Command",
+                         "Get-CimInstance Win32_Process | Where-Object "
+                         "{$_.CommandLine -like '*subtitle_overlay.py*'} | "
+                         "Select-Object -ExpandProperty ProcessId"],
+                        capture_output=True, text=True, **_SUBPROCESS_FLAGS)
+                    for _line in _tl.stdout.strip().splitlines():
+                        _pid = _line.strip()
+                        if _pid.isdigit():
+                            try:
+                                subprocess.run(["taskkill", "/F", "/PID", _pid],
+                                               capture_output=True, **_SUBPROCESS_FLAGS)
+                            except Exception:
+                                pass
+                else:
+                    # macOS / Linux: pkill
+                    subprocess.run(["pkill", "-f", "subtitle_overlay.py"],
+                                   capture_output=True)
+            except Exception:
+                pass
+            try:
+                _overlay_proc = subprocess.Popen(
+                    [sys.executable, _overlay_script,
+                     "--config", os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")],
+                    **_SUBPROCESS_FLAGS)
+                # 等待 0.5 秒檢查是否立即退出（如 PyQt6 未安裝）
+                import time as _t
+                _t.sleep(0.5)
+                if _overlay_proc.poll() is not None:
+                    print(f"  {C_HIGHLIGHT}[懸浮字幕] 啟動失敗（可能未安裝 PyQt6：pip install PyQt6）{RESET}")
+                else:
+                    _overlay_proc_ref = _overlay_proc
+                    import atexit
+                    atexit.register(lambda: _overlay_proc_ref.terminate() if _overlay_proc_ref and _overlay_proc_ref.poll() is None else None)
+                    print(f"  [懸浮字幕] 已啟動覆蓋視窗（PID {_overlay_proc.pid}）")
+            except Exception as _e:
+                print(f"  {C_HIGHLIGHT}[懸浮字幕] 啟動失敗: {_e}{RESET}")
+        else:
+            print(f"  [懸浮字幕] 找不到 subtitle_overlay.py", file=sys.stderr)
 
     # --rec-device 自動啟用 --record
     if args.rec_device is not None and not args.record:
@@ -12368,13 +12709,16 @@ def main():
                 translator_lb = None
                 translator_mic = None
             try:
+                _gen_srt = not getattr(args, 'no_srt', False)
+                _gen_vtt = not getattr(args, 'no_vtt', False)
                 log_path, t_html, session_dir = process_bidi_audio_files(
                     lb_path, mic_path, mode, translator_lb, translator_mic,
                     model_size=fw_model, remote_whisper_cfg=remote_whisper_cfg,
                     diarize=diarize, num_speakers=num_speakers,
                     correct_with_llm=_do_llm_correct,
                     llm_model=summary_model, llm_host=host, llm_port=port,
-                    llm_server_type=server_type, meeting_topic=meeting_topic)
+                    llm_server_type=server_type, meeting_topic=meeting_topic,
+                    gen_srt=_gen_srt, gen_vtt=_gen_vtt)
                 if log_path:
                     log_paths.append((log_path, lb_path, session_dir))
                 if t_html:
@@ -12383,13 +12727,16 @@ def main():
                 pass
         else:
             try:
+                _gen_srt = not getattr(args, 'no_srt', False)
+                _gen_vtt = not getattr(args, 'no_vtt', False)
                 for fpath in args.input:
                     log_path, t_html, session_dir = process_audio_file(fpath, mode, translator, model_size=fw_model,
                                                            diarize=diarize, num_speakers=num_speakers,
                                                            remote_whisper_cfg=remote_whisper_cfg,
                                                            correct_with_llm=_do_llm_correct,
                                                            llm_model=summary_model, llm_host=host, llm_port=port,
-                                                           llm_server_type=server_type, meeting_topic=meeting_topic)
+                                                           llm_server_type=server_type, meeting_topic=meeting_topic,
+                                                           gen_srt=_gen_srt, gen_vtt=_gen_vtt)
                     if log_path:
                         log_paths.append((log_path, fpath, session_dir))
                     if t_html:

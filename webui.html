@@ -38,7 +38,10 @@ body:not(.has-live){overflow:auto}
 .hdr-left{display:flex;align-items:center;gap:12px}.hdr-dot{width:10px;height:10px;border-radius:50%;background:rgba(255,255,255,.3);flex-shrink:0}
 .hdr-dot.on{background:#4ade80;box-shadow:0 0 12px rgba(74,222,128,.6);animation:glow 2s infinite}
 @keyframes glow{0%,100%{box-shadow:0 0 12px rgba(74,222,128,.6)}50%{box-shadow:0 0 4px rgba(74,222,128,.2)}}
-.hdr-title{font-weight:700;font-size:17px}.hdr-ver{font-size:12px;opacity:.6}.hdr-stats{display:flex;gap:16px;font-size:13px;opacity:.8}
+.hdr-title{font-weight:700;font-size:17px}.hdr-ver{font-size:12px;opacity:.6}.hdr-stats{display:flex;gap:16px;font-size:13px;opacity:.8;align-items:center}
+@font-face{font-family:'DSEG';src:url('data:font/woff2;base64,') format('woff2');font-display:swap}
+.hdr-timer{font-family:"SF Mono","Courier New",monospace;font-size:15px;font-weight:700;letter-spacing:3px;font-variant-numeric:tabular-nums;background:linear-gradient(180deg,rgba(0,10,20,.8) 0%,rgba(0,20,35,.9) 100%);color:#0ff;padding:4px 14px;border-radius:6px;border:1px solid rgba(0,255,255,.15);box-shadow:0 0 8px rgba(0,255,255,.15),inset 0 1px 0 rgba(255,255,255,.05),inset 0 -1px 0 rgba(0,0,0,.3);text-shadow:0 0 6px rgba(0,255,255,.7),0 0 14px rgba(0,255,255,.25);position:relative;min-width:58px;text-align:center}
+.hdr-timer::before{content:attr(data-bg);position:absolute;left:14px;right:14px;color:rgba(0,255,255,.06);letter-spacing:3px;font-size:15px;font-weight:700;text-align:center;pointer-events:none}
 .hdr-right{display:flex;gap:8px}.hdr-btn{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.2);color:#fff;padding:5px 14px;border-radius:20px;font-size:12px;cursor:pointer;transition:all .2s}.hdr-btn:hover{background:rgba(255,255,255,.25)}
 .setup{flex:1;overflow-y:auto;display:flex;flex-direction:column;justify-content:flex-start;align-items:center;padding:28px 16px;transition:opacity .3s ease,transform .3s ease}
 .setup.fade-out{opacity:0;transform:translateY(-12px);pointer-events:none}
@@ -58,14 +61,18 @@ body:not(.has-live){overflow:auto}
 .card{background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius);padding:28px;max-width:520px;width:100%;box-shadow:var(--shadow-lg);margin-bottom:32px}
 .card h2{font-size:19px;margin-bottom:6px}.card-sub{font-size:13px;color:var(--text-dim);margin-bottom:22px;padding-bottom:16px;border-bottom:1px solid var(--border-light)}
 .sec{background:var(--section-bg);border:1px solid var(--border-light);border-radius:var(--radius-sm);padding:18px 16px 16px;margin-bottom:28px;position:relative;margin-top:22px}
-.sec-title{display:inline-flex;align-items:center;gap:6px;font-size:14px;font-weight:600;color:#fff;background:linear-gradient(135deg,#2c3e50,#3498db);padding:5px 16px;border:none;border-radius:6px;position:absolute;top:-15px;left:14px;letter-spacing:.5px;box-shadow:0 2px 6px rgba(52,152,219,.25)}
+.sec-title{display:inline-flex;align-items:center;gap:6px;font-size:14px;font-weight:600;color:#fff;background:linear-gradient(135deg,#2c3e50,#3498db);padding:5px 16px;border:none;border-radius:6px;position:absolute;top:-15px;left:14px;letter-spacing:.5px;box-shadow:0 2px 6px rgba(52,152,219,.25);cursor:pointer;user-select:none}
+.sec-title .chevron{width:12px;height:12px;transition:transform .25s ease;margin-left:2px}
+.sec.collapsed .chevron{transform:rotate(-90deg)}
+.sec-body{transition:max-height .3s ease,opacity .3s ease}
+.sec.collapsed .sec-body{opacity:0}
 .sec-title svg{width:16px;height:16px;stroke:#fff;flex-shrink:0}
 .dark .sec-title{background:linear-gradient(135deg,#1e3a5f,#2980b9)}
 .sec-hint{font-size:12px;color:var(--text-dim);margin-bottom:12px;line-height:1.6;padding-left:2px}
 .fg{margin-bottom:14px}.fg:last-child{margin-bottom:0}
 .fg label{display:block;font-size:13px;color:var(--text-dim);margin-bottom:4px;font-weight:700}
-.fg input{width:100%;padding:9px 12px;font-size:14px;background:var(--input-bg);color:var(--text);border:1px solid var(--input-border);border-radius:var(--radius-sm);outline:none;transition:border .2s,box-shadow .2s}
-.fg input:focus{border-color:var(--input-focus);box-shadow:0 0 0 3px rgba(13,110,253,.12)}
+.fg input,.fg select,.fg textarea{width:100%;padding:9px 12px;font-size:14px;background:var(--input-bg);color:var(--text);border:1px solid var(--input-border);border-radius:var(--radius-sm);outline:none;transition:border .2s,box-shadow .2s}
+.fg input:focus,.fg select:focus,.fg textarea:focus{border-color:var(--input-focus);box-shadow:0 0 0 3px rgba(13,110,253,.12)}
 .row2{display:flex;gap:12px}.row2 .fg{flex:1}
 .row3{display:flex;gap:8px;align-items:flex-end}.row3 .fg{flex:1;margin-bottom:0}
 .test-btn{padding:0 16px;font-size:13px;background:var(--bg2);color:var(--text);border:1px solid var(--input-border);border-radius:var(--radius-sm);cursor:pointer;white-space:nowrap;flex-shrink:0;height:38px;line-height:38px;transition:all .2s;margin-bottom:0}.test-btn:hover{border-color:var(--accent);color:var(--accent)}
@@ -91,6 +98,11 @@ body:not(.has-live){overflow:auto}
 .file-item input{accent-color:var(--accent);width:16px;height:16px;flex-shrink:0}.file-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.file-size{color:var(--text-dim);font-size:12px;flex-shrink:0}
 .upload-zone{border:2px dashed var(--border);border-radius:var(--radius-sm);padding:20px;text-align:center;color:var(--text-dim);font-size:13px;cursor:pointer;transition:border-color .2s,background .2s}
 .upload-zone:hover,.upload-zone.drag{border-color:var(--accent);background:var(--sel-hover)}
+.fwd-cards{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+.fwd-card{border:1px solid var(--border-light);border-radius:8px;padding:10px 12px;transition:border-color .2s}
+.fwd-card:has(input:checked){border-color:var(--accent)}
+.fwd-head{font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px}
+.fwd-head input{accent-color:var(--accent);width:15px;height:15px}
 .upload-zone input{display:none}
 /* Live */
 .live{flex:1;display:none;flex-direction:column;min-height:0;opacity:0;transform:translateY(12px);transition:opacity .35s ease,transform .35s ease}.live.on{display:flex}.live.shown{opacity:1;transform:translateY(0)}
@@ -115,7 +127,7 @@ body:not(.has-live){overflow:auto}
 .sbadge-mode{background:rgba(52,152,219,.15);color:#2980b9}.dark .sbadge-mode{background:rgba(121,192,255,.15);color:#79c0ff}
 .sbadge-model{background:rgba(142,68,173,.12);color:#8e44ad}.dark .sbadge-model{background:rgba(187,143,206,.15);color:#bb8fce}
 .sbadge-trans{background:rgba(230,126,34,.12);color:#d35400}.dark .sbadge-trans{background:rgba(243,156,18,.15);color:#f39c12}
-.sbadge-rec{background:rgba(220,53,69,.12);color:var(--red)}.sbadge-denoise{background:rgba(25,135,84,.12);color:var(--green)}.sbadge-mic{background:rgba(13,110,253,.12);color:var(--accent)}.sbadge-diarize{background:rgba(253,126,20,.12);color:var(--orange)}.sbadge-summarize{background:rgba(111,66,193,.12);color:#6f42c1}
+.sbadge-rec{background:rgba(220,53,69,.12);color:var(--red)}.sbadge-denoise{background:rgba(25,135,84,.12);color:var(--green)}.sbadge-mic{background:rgba(13,110,253,.12);color:var(--accent)}.sbadge-diarize{background:rgba(253,126,20,.12);color:var(--orange)}.sbadge-summarize{background:rgba(111,66,193,.12);color:#6f42c1}.sbadge-forward{background:rgba(0,188,212,.12);color:#00bcd4}
 .msgs{flex:1;overflow-y:auto;padding:16px 20px;display:flex;flex-direction:column;gap:12px;min-height:0}.msgs::-webkit-scrollbar{width:5px}.msgs::-webkit-scrollbar-thumb{background:var(--scrollbar);border-radius:3px}
 .msgs{scroll-behavior:smooth}
 .m{max-width:78%;padding:10px 16px;border-radius:12px;font-size:15px;line-height:1.6;word-wrap:break-word;animation:msgIn .4s ease;transform-origin:bottom}
@@ -172,6 +184,13 @@ kbd{display:inline-block;font-family:inherit;font-size:10px;padding:1px 5px;bord
 .disc-tag-sum{background:rgba(199,146,234,.15);color:#c792ea}
 .disc-tag-trans{background:rgba(130,170,255,.15);color:#82aaff}
 .disc-label{color:var(--text-dim)}
+.kw-alert{text-align:center;padding:8px 16px;margin:6px auto;max-width:500px;border-radius:8px;background:rgba(255,193,7,.1);border:1px solid rgba(255,193,7,.3);font-size:13px;animation:kwFlash 1s ease}
+.kw-alert-tag{font-weight:700;color:#ffc107}.kw-alert-ctx{color:var(--text-dim)}
+@keyframes kwFlash{0%{background:rgba(255,193,7,.25)}100%{background:rgba(255,193,7,.1)}}
+.kw-fullscreen{position:fixed;inset:0;z-index:9999;pointer-events:none;display:flex;align-items:center;justify-content:center;animation:kwFullFlash 1.8s ease-out forwards}
+.kw-fullscreen-text{font-size:clamp(36px,8vw,72px);font-weight:900;color:#fff;text-shadow:0 0 30px rgba(255,193,7,.8),0 0 60px rgba(255,60,60,.5);letter-spacing:6px;animation:kwTextPulse 1.8s ease-out forwards}
+@keyframes kwFullFlash{0%{background:rgba(255,60,60,.35)}8%{background:transparent}16%{background:rgba(255,193,7,.3)}24%{background:transparent}32%{background:rgba(255,60,60,.25)}40%{background:transparent}100%{background:transparent;opacity:0}}
+@keyframes kwTextPulse{0%{opacity:1;transform:scale(1.2)}15%{opacity:0.3}30%{opacity:1;transform:scale(1)}45%{opacity:0.3}60%{opacity:1;transform:scale(0.95)}100%{opacity:0;transform:scale(0.8)}}
 .toast{position:fixed;top:60px;left:50%;transform:translateX(-50%);padding:12px 24px;border-radius:var(--radius-sm);font-size:14px;z-index:200;box-shadow:0 4px 16px rgba(0,0,0,.25);animation:toastIn .3s ease}
 .toast-err{background:var(--red);color:#fff}.toast-ok{background:var(--green);color:#fff}
 @keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(-10px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
@@ -196,13 +215,13 @@ kbd{display:inline-block;font-family:inherit;font-size:10px;padding:1px 5px;bord
 </head>
 <body>
 <div class="hdr">
-  <div class="hdr-left"><span class="hdr-dot" id="dot"></span><a class="hdr-title" href="https://github.com/jasoncheng7115/jt-live-whisper" target="_blank" style="color:#fff;text-decoration:none">jt-live-whisper</a><span class="hdr-ver" id="verLabel"></span><div class="hdr-stats"><span id="hMode">--</span><span id="hSource" style="opacity:.6"></span><span id="hCount"></span></div></div>
+  <div class="hdr-left"><span class="hdr-dot" id="dot"></span><a class="hdr-title" href="https://github.com/jasoncheng7115/jt-live-whisper" target="_blank" style="color:#fff;text-decoration:none">jt-live-whisper</a><span class="hdr-ver" id="verLabel"></span><div class="hdr-stats"><span id="hMode">--</span><span id="hSource" style="opacity:.6"></span><span class="hdr-timer" id="hTimer" style="display:none"></span></div></div>
   <div class="hdr-right"><button class="hdr-btn" onclick="toggleTheme()" id="tBtn">深色主題</button></div>
 </div>
 <div class="setup" id="pSetup">
-<div class="cfg-loading" id="cfgLoading"><div class="cfg-spinner"></div><div style="margin-top:12px;color:var(--text-dim);font-size:14px">載入設定中...</div></div>
+<div class="cfg-loading" id="cfgLoading"><div class="cfg-spinner"></div><div style="margin-top:12px;color:var(--text-dim);font-size:14px" id="cfgLoadingText">載入設定中...</div></div>
 <div class="card" id="cfgCard" style="opacity:0;transition:opacity .3s">
-  <h2>即時辨識設定</h2>
+  <h2><svg viewBox="0 0 24 24" style="width:22px;height:22px;vertical-align:middle;margin-right:6px;fill:none;stroke:var(--accent);stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 00-2.91-.09z"/><path d="M12 15l-3-3a22 22 0 012-3.95A12.88 12.88 0 0122 2c0 2.72-.78 7.5-6 11.95A22 22 0 0112 15z"/><path d="M9 12H4s.55-3.03 2-4.5C7.5 6 10 5.5 10 5.5"/><path d="M12 15v5s3.03-.55 4.5-2c1.5-1.5 2-4.5 2-4.5"/></svg>開始使用</h2>
   <div class="card-sub">設定完成後按下「開始」即可啟動即時辨識或離線處理</div>
   <!-- 輸入來源 -->
   <div class="sec">
@@ -255,7 +274,11 @@ kbd{display:inline-block;font-family:inherit;font-size:10px;padding:1px 5px;bord
     <div class="sec-hint">講者辨識可區分不同發言者，搭配摘要可自動產生會議重點。摘要需要 LLM 伺服器。</div>
     <div class="checks">
       <label><input type="checkbox" id="iDiarize" onchange="onDiarizeChg()"> 講者辨識</label>
-      <label><input type="checkbox" id="iSummarize" onchange="onSummarizeChg()"> 產生摘要</label>
+      <label><input type="checkbox" id="iSummarize" onchange="onSummarizeChg()"> 產生摘要與校正逐字稿</label>
+    </div>
+    <div class="checks" style="margin-top:-2px">
+      <label><input type="checkbox" id="iGenSrt" checked> 產生 SRT 字幕</label>
+      <label><input type="checkbox" id="iGenVtt" checked> 產生 VTT 字幕</label>
       <!-- 多次摘要功能暫時隱藏 -->
       <label style="display:none"><select id="iSumRounds"><option value="1">1</option></select></label>
     </div>
@@ -288,6 +311,124 @@ kbd{display:inline-block;font-family:inherit;font-size:10px;padding:1px 5px;bord
     <div class="fg"><label>管理密碼（選填）</label><div style="display:flex;gap:6px"><input type="password" id="iPwAdmin" placeholder="空白 = 不啟用遠端管理" style="flex:1"><button type="button" class="test-btn" onclick="togglePwVis('iPwAdmin',this)" style="flex-shrink:0;min-width:42px;display:flex;align-items:center;justify-content:center"><svg viewBox="0 0 24 24" style="width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.5"><path d="M1 12C1 12 5 4 12 4C19 4 23 12 23 12C23 12 19 20 12 20C5 20 1 12 1 12Z"/><circle cx="12" cy="12" r="3"/></svg></button></div><div style="font-size:11px;color:var(--text-dim);margin-top:4px" id="pwAdminHint">未設定 = 遠端無法啟動/停止/切換裝置</div></div>
     <div style="margin-top:8px"><button class="test-btn" onclick="savePw()" style="display:inline-flex;align-items:center;gap:4px"><svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.5"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>儲存密碼</button><span id="pwResult" style="margin-left:8px;font-size:12px"></span></div>
   </div>
+  <!-- 關鍵字通知（僅本機顯示）-->
+  <div class="sec" id="rKeyword" style="display:none">
+    <div class="sec-title"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.5"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><path d="M13.73 21a2 2 0 01-3.46 0" stroke="currentColor" stroke-linecap="round"/></svg>關鍵通知</div>
+    <div class="sec-hint">即時辨識出現指定關鍵字時發出通知。可用於追蹤會議重點、開會時提醒你留意關鍵議題，或線上課程摸魚時讓系統在「請實作」「這個會考」時自動提醒。</div>
+    <div class="checks">
+      <label><input type="checkbox" id="iKwEnable" onchange="toggleKwArea()"> 啟用關鍵通知</label>
+    </div>
+    <div id="kwArea" style="display:none">
+      <div class="fg"><label>關鍵字（每行一個，不分大小寫）</label><textarea id="iKwWords" rows="4" placeholder="台積電&#10;Proxmox&#10;請實作&#10;這個會考" style="resize:vertical"></textarea></div>
+      <div class="fg" style="display:flex;align-items:center;gap:8px;font-size:13px">
+        <span style="white-space:nowrap;flex-shrink:0">冷卻時間</span>
+        <input type="number" id="iKwCooldown" value="30" min="5" max="300" style="width:62px;flex-shrink:0">
+        <span style="flex-shrink:0">秒</span>
+        <span style="font-size:11px;color:var(--text-dim)">同一關鍵字在冷卻時間內不重複通知</span>
+      </div>
+      <div class="checks">
+        <label><input type="checkbox" id="iKwBrowser" checked> 瀏覽器通知</label>
+        <label><input type="checkbox" id="iKwSound" checked> 音效提示</label>
+        <select id="iKwSoundStyle" style="padding:4px 8px;font-size:12px;background:var(--input-bg);color:var(--text);border:1px solid var(--input-border);border-radius:var(--radius-sm)"><option value="alert">警示音</option><option value="gentle">柔和音</option></select>
+        <label><input type="checkbox" id="iKwOverlay"> 懸浮字幕閃爍</label>
+      </div>
+      <div style="margin-top:8px"><button class="test-btn" onclick="saveKw()" style="display:inline-flex;align-items:center;gap:4px"><svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.5"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>儲存設定</button><span id="kwResult" style="margin-left:8px;font-size:12px"></span></div>
+    </div>
+  </div>
+  <!-- 懸浮字幕（僅本機顯示）-->
+  <div class="sec" id="rOverlay" style="display:none">
+    <div class="sec-title"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.5"><rect x="2" y="4" width="20" height="16" rx="2" stroke="currentColor"/><path d="M6 14h4M11 14h7M6 18h12" stroke="currentColor" stroke-linecap="round"/></svg>懸浮字幕</div>
+    <div class="sec-hint">在螢幕上顯示半透明字幕覆蓋視窗，可疊加於任何應用程式上方。需安裝 PyQt6。</div>
+    <div class="checks">
+      <label><input type="checkbox" id="iOvEnable" onchange="toggleOvArea()"> 啟用懸浮字幕</label>
+    </div>
+    <div id="ovArea" style="display:none">
+      <!-- 字型選擇（暫時隱藏）-->
+      <div style="display:none"><select id="iOvFont"><option value="">系統預設</option></select><input type="hidden" id="iOvFontSrc" value="16"><input type="hidden" id="iOvFontDst" value="22"></div>
+      <div class="fg" style="display:flex;align-items:center;gap:8px;font-size:13px">
+        <span style="white-space:nowrap;flex-shrink:0">透明度</span>
+        <input type="range" id="iOvOpacityRange" min="20" max="95" value="65" style="flex:1" oninput="$('iOvOpacity').value=this.value">
+        <input type="number" id="iOvOpacity" value="65" min="20" max="95" style="width:62px;flex-shrink:0" oninput="$('iOvOpacityRange').value=this.value"><span style="flex-shrink:0">%</span>
+      </div>
+      <div class="checks">
+        <label><input type="checkbox" id="iOvClickThrough"> 滑鼠穿透</label>
+        <label style="display:none"><input type="checkbox" id="iOvSingleLine"> 純轉錄單行</label>
+      </div>
+      <div style="margin-top:8px"><button class="test-btn" onclick="saveOverlay()" style="display:inline-flex;align-items:center;gap:4px"><svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.5"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>儲存設定</button><span id="ovResult" style="margin-left:8px;font-size:12px"></span></div>
+    </div>
+  </div>
+  <!-- 字幕轉發（僅本機顯示）-->
+  <div class="sec" id="rForward" style="display:none">
+    <div class="sec-title"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.5"><path d="M22 2L11 13" stroke="currentColor" stroke-linecap="round"/><path d="M22 2L15 22L11 13L2 9L22 2Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/></svg>字幕轉發</div>
+    <div class="sec-hint">即時字幕自動轉發到通訊平台，每隔指定秒數發送一次累積字幕。可同時啟用多個平台。</div>
+    <div class="checks">
+      <label><input type="checkbox" id="iFwdEnable" onchange="toggleFwdArea()"> 啟用字幕轉發</label>
+    </div>
+    <div id="fwdArea" style="display:none">
+      <div class="fg" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><label>發送間隔（秒）</label><input type="number" id="iFwdInterval" value="10" min="5" max="120" style="width:80px"><span style="font-size:11px;color:var(--text-dim)">最低 5 秒，避免頻繁發送被平台封鎖</span></div>
+      <div class="fwd-cards">
+        <div class="fwd-card">
+          <label class="fwd-head"><input type="checkbox" id="iFwdTg" onchange="toggleFwdCard('Tg')"><svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:#2AABEE;flex-shrink:0"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69.01-.03.01-.14-.07-.2-.08-.06-.19-.04-.28-.02-.12.03-2.02 1.28-5.69 3.77-.54.37-1.03.55-1.47.54-.48-.01-1.4-.27-2.09-.49-.84-.27-1.51-.42-1.45-.88.03-.24.37-.49 1.02-.74 3.98-1.73 6.64-2.88 7.97-3.44 3.8-1.58 4.59-1.86 5.1-1.87.11 0 .37.03.54.17.14.12.18.28.2.47-.01.06.01.24 0 .4z"/></svg> Telegram</label>
+          <div id="fwdTgFields" style="display:none">
+            <div class="fg"><label>Bot Token</label><input id="iFwdTgToken" type="password" placeholder="123456:ABC-DEF..."></div>
+            <div class="fg"><label>Chat ID</label><input id="iFwdTgChat" placeholder="-1001234567890"></div>
+          </div>
+        </div>
+        <div class="fwd-card">
+          <label class="fwd-head"><input type="checkbox" id="iFwdSlack" onchange="toggleFwdCard('Slack')"><svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:#E01E5A;flex-shrink:0"><path d="M5.04 15.16a2.28 2.28 0 01-2.28 2.28 2.28 2.28 0 01-2.28-2.28 2.28 2.28 0 012.28-2.28h2.28v2.28zm1.14 0a2.28 2.28 0 012.28-2.28 2.28 2.28 0 012.28 2.28v5.72a2.28 2.28 0 01-2.28 2.28 2.28 2.28 0 01-2.28-2.28v-5.72z"/><path d="M8.46 5.04a2.28 2.28 0 01-2.28-2.28A2.28 2.28 0 018.46.48a2.28 2.28 0 012.28 2.28v2.28H8.46zm0 1.14a2.28 2.28 0 012.28 2.28 2.28 2.28 0 01-2.28 2.28H2.76A2.28 2.28 0 01.48 8.46a2.28 2.28 0 012.28-2.28h5.7z" fill="#36C5F0"/><path d="M18.96 8.46a2.28 2.28 0 012.28-2.28 2.28 2.28 0 012.28 2.28 2.28 2.28 0 01-2.28 2.28h-2.28V8.46zm-1.14 0a2.28 2.28 0 01-2.28 2.28 2.28 2.28 0 01-2.28-2.28V2.76A2.28 2.28 0 0115.54.48a2.28 2.28 0 012.28 2.28v5.7z" fill="#2EB67D"/><path d="M15.54 18.96a2.28 2.28 0 012.28 2.28 2.28 2.28 0 01-2.28 2.28 2.28 2.28 0 01-2.28-2.28v-2.28h2.28zm0-1.14a2.28 2.28 0 01-2.28-2.28 2.28 2.28 0 012.28-2.28h5.7a2.28 2.28 0 012.28 2.28 2.28 2.28 0 01-2.28 2.28h-5.7z" fill="#ECB22E"/></svg> Slack</label>
+          <div id="fwdSlackFields" style="display:none">
+            <div class="fg"><label>Webhook URL</label><input id="iFwdSlackUrl" type="password" placeholder="https://hooks.slack.com/services/..."></div>
+          </div>
+        </div>
+        <div class="fwd-card">
+          <label class="fwd-head"><input type="checkbox" id="iFwdDiscord" onchange="toggleFwdCard('Discord')"><svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:#5865F2;flex-shrink:0"><path d="M20.32 4.37a19.8 19.8 0 00-4.89-1.52.07.07 0 00-.08.04c-.21.38-.44.87-.6 1.25a18.27 18.27 0 00-5.5 0 12.64 12.64 0 00-.62-1.25.08.08 0 00-.08-.04 19.74 19.74 0 00-4.89 1.52.07.07 0 00-.03.03C1.07 8.93.32 13.36.79 17.73a.08.08 0 00.03.06 19.9 19.9 0 005.99 3.03.08.08 0 00.08-.03c.46-.63.87-1.3 1.22-2a.08.08 0 00-.04-.11 13.1 13.1 0 01-1.87-.9.08.08 0 01-.01-.13c.13-.09.25-.19.37-.29a.08.08 0 01.08-.01c3.93 1.8 8.18 1.8 12.07 0a.08.08 0 01.08.01c.12.1.25.2.37.29a.08.08 0 01-.01.13c-.6.35-1.22.65-1.87.9a.08.08 0 00-.04.11c.36.7.77 1.37 1.22 2a.08.08 0 00.08.03 19.83 19.83 0 006-3.03.08.08 0 00.03-.06c.56-5.01-.87-9.4-3.64-13.33a.06.06 0 00-.03-.03zM8.02 15.17c-1.18 0-2.16-1.08-2.16-2.42 0-1.33.96-2.42 2.16-2.42 1.21 0 2.18 1.1 2.16 2.42 0 1.34-.96 2.42-2.16 2.42zm7.97 0c-1.18 0-2.16-1.08-2.16-2.42 0-1.33.96-2.42 2.16-2.42 1.21 0 2.18 1.1 2.16 2.42 0 1.34-.95 2.42-2.16 2.42z"/></svg> Discord</label>
+          <div id="fwdDiscordFields" style="display:none">
+            <div class="fg"><label>Webhook URL</label><input id="iFwdDiscordUrl" type="password" placeholder="https://discord.com/api/webhooks/..."></div>
+          </div>
+        </div>
+        <div class="fwd-card">
+          <label class="fwd-head"><input type="checkbox" id="iFwdTeams" onchange="toggleFwdCard('Teams')"><svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:#6264A7;flex-shrink:0"><path d="M16.5 5.5a2 2 0 100-4 2 2 0 000 4zM20 7.5h-7a1 1 0 00-1 1v6a1 1 0 001 1h3v4.5a1 1 0 001 1h2a1 1 0 001-1V8.5a1 1 0 00-1-1z"/><circle cx="20.5" cy="4" r="2.5" fill="#7B83EB"/><path d="M22 7h-2.5a1 1 0 00-1 1v5.5a2.5 2.5 0 005 0V8a1 1 0 00-1-1z" fill="#7B83EB"/><path d="M13 8H3.5A1.5 1.5 0 002 9.5v5A1.5 1.5 0 003.5 16H5v3.5a.5.5 0 00.5.5h1a.5.5 0 00.5-.5V16h1.5v3.5a.5.5 0 00.5.5h1a.5.5 0 00.5-.5V16H13a1 1 0 001-1V9a1 1 0 00-1-1z"/></svg> Teams</label>
+          <div id="fwdTeamsFields" style="display:none">
+            <div class="fg"><label>Webhook URL</label><input id="iFwdTeamsUrl" type="password" placeholder="https://outlook.office.com/webhook/..."></div>
+          </div>
+        </div>
+        <div class="fwd-card">
+          <label class="fwd-head"><input type="checkbox" id="iFwdLine" onchange="toggleFwdCard('Line')"><svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:#06C755;flex-shrink:0"><path d="M12 2C6.48 2 2 5.83 2 10.45c0 4.15 3.68 7.63 8.66 8.28.34.07.8.22.91.51.1.26.07.67.03.94l-.15.87c-.04.26-.2 1.01.88.55s5.88-3.47 8.03-5.93C22.19 13.6 22 12.08 22 10.45 22 5.83 17.52 2 12 2zM8.6 13.13H6.73a.57.57 0 01-.57-.57V9.2c0-.31.25-.57.57-.57s.57.25.57.57v2.79h1.3c.31 0 .57.26.57.57s-.26.57-.57.57zm1.77-.57a.57.57 0 01-1.14 0V9.2a.57.57 0 011.14 0v3.36zm4.08 0c0 .23-.14.44-.35.53a.56.56 0 01-.63-.12l-1.93-2.63v2.22a.57.57 0 01-1.14 0V9.2c0-.23.14-.44.35-.53a.56.56 0 01.63.12l1.93 2.63V9.2a.57.57 0 011.14 0v3.36zm3.07-2.23a.57.57 0 010 1.14h-1.3v.52h1.3a.57.57 0 010 1.14h-1.87a.57.57 0 01-.57-.57V9.2c0-.31.26-.57.57-.57h1.87a.57.57 0 010 1.14h-1.3v.56h1.3z"/></svg> LINE</label>
+          <div id="fwdLineFields" style="display:none">
+            <div class="fg"><label>Channel Access Token</label><input id="iFwdLineToken" type="password" placeholder="LINE Messaging API 的 Channel Access Token"></div>
+            <div class="fg"><label>接收者 ID</label><input id="iFwdLineTarget" placeholder="群組 ID 或使用者 ID（C 開頭）"></div>
+          </div>
+        </div>
+        <div class="fwd-card">
+          <label class="fwd-head"><input type="checkbox" id="iFwdNctalk" onchange="toggleFwdCard('Nctalk')"><svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:#0082C9;flex-shrink:0"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 15.5c-1.93 0-3.5-1.57-3.5-3.5s1.57-3.5 3.5-3.5 3.5 1.57 3.5 3.5-1.57 3.5-3.5 3.5z"/></svg> Nextcloud Talk</label>
+          <div id="fwdNctalkFields" style="display:none">
+            <div class="fg"><label>Nextcloud URL</label><input id="iFwdNctalkUrl" placeholder="https://cloud.example.com"></div>
+            <div class="fg"><label>對話 Token</label><input id="iFwdNctalkRoom" placeholder="對話的 token（網址最後一段）"></div>
+            <div class="fg"><label>使用者帳號</label><input id="iFwdNctalkUser" placeholder="Nextcloud 帳號"></div>
+            <div class="fg"><label>App 密碼</label><input id="iFwdNctalkPass" type="password" placeholder="設定 → 安全性 → 應用程式密碼"></div>
+          </div>
+        </div>
+        <div class="fwd-card">
+          <label class="fwd-head"><input type="checkbox" id="iFwdCustom" onchange="toggleFwdCard('Custom')"><svg viewBox="0 0 24 24" style="width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.5;flex-shrink:0"><path d="M10 20l4-16m4 4l4 4-4 4M6 8l-4 4 4 4" stroke-linecap="round" stroke-linejoin="round"/></svg> 通用 API</label>
+          <div id="fwdCustomFields" style="display:none">
+            <div class="fg"><label>API URL</label><input id="iFwdCustomUrl" placeholder="https://example.com/api/subtitle"></div>
+            <div class="fg"><label>Body 範本（選填）</label><input id="iFwdCustomBody" placeholder='{"message":"{{text}}","channel":"#live"}'><div style="font-size:11px;color:var(--text-dim);margin-top:3px">用 <code>{{text}}</code> 變數代入字幕內容。填 JSON 格式會自動設 Content-Type: application/json。不填則以純文字 POST。</div></div>
+            <div class="fg"><label>自訂 Headers（JSON，選填）</label><input id="iFwdCustomHeaders" placeholder='{"Authorization":"Bearer xxx"}'></div>
+          </div>
+        </div>
+      </div>
+      <div class="checks" style="margin-top:10px">
+        <label><input type="checkbox" id="iFwdTs"> 含時間</label>
+        <label><input type="checkbox" id="iFwdSrc" checked> 含原文</label>
+        <label><input type="checkbox" id="iFwdDst" checked> 含譯文</label>
+      </div>
+      <div style="margin-top:8px;display:flex;gap:8px;align-items:center">
+        <button class="test-btn" onclick="saveFwd()" style="display:inline-flex;align-items:center;gap:4px"><svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.5"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>儲存設定</button>
+        <button class="test-btn" onclick="testFwd()" style="display:inline-flex;align-items:center;gap:4px"><svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.5"><path d="M22 2L11 13" stroke-linecap="round"/><path d="M22 2L15 22L11 13L2 9L22 2Z" stroke-linecap="round" stroke-linejoin="round"/></svg>測試發送</button>
+        <span id="fwdResult" style="font-size:12px"></span>
+      </div>
+    </div>
+  </div>
   <button class="go-btn" id="goBtn" onclick="go()"><svg viewBox="0 0 24 24" style="width:18px;height:18px;fill:currentColor;stroke:none;vertical-align:middle;margin-right:6px"><polygon points="5,3 19,12 5,21"/></svg>開始</button>
 </div>
 </div>
@@ -295,7 +436,6 @@ kbd{display:inline-block;font-family:inherit;font-size:10px;padding:1px 5px;bord
 <div class="live" id="pLive">
   <div class="sbar">
     <div class="sbar-left">
-      <span class="timer" id="sTimer">00:00</span>
       <span class="sbadge sbadge-mode" id="bMode"><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/></svg><span id="sMode"></span></span>
       <span class="sbadge sbadge-model" id="bModel"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10" stroke="currentColor" stroke-linecap="round"/></svg><span id="sModel"></span></span>
       <span class="sbadge sbadge-trans" id="bTrans" style="display:none"><svg viewBox="0 0 24 24"><path d="M2 12C2 17.5 6.5 22 12 22C17.5 22 22 17.5 22 12C22 6.5 17.5 2 12 2C6.5 2 2 6.5 2 12Z" stroke="currentColor"/><path d="M2.6 15.5H21.4M2.6 8.5H21.4" stroke="currentColor"/></svg><span id="sEngine"></span></span>
@@ -303,11 +443,12 @@ kbd{display:inline-block;font-family:inherit;font-size:10px;padding:1px 5px;bord
       <span class="sbadge sbadge-mic" id="bMic" style="display:none"><svg viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="12" rx="3" stroke="currentColor" fill="none"/></svg>麥克風</span>
       <span class="sbadge sbadge-diarize" id="bDiarize" style="display:none"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" stroke="currentColor" fill="none" stroke-width="1.5" stroke-linecap="round"/><circle cx="9" cy="7" r="4" stroke="currentColor" fill="none" stroke-width="1.5"/><path d="M23 21v-2a4 4 0 0 0-3-3.87" stroke="currentColor" fill="none" stroke-width="1.5" stroke-linecap="round"/><path d="M16 3.13a4 4 0 0 1 0 7.75" stroke="currentColor" fill="none" stroke-width="1.5" stroke-linecap="round"/></svg>講者辨識</span>
       <span class="sbadge sbadge-summarize" id="bSummarize" style="display:none"><svg viewBox="0 0 24 24"><path d="M4 4h16v16H4z" stroke="currentColor" fill="none" stroke-width="1.5" stroke-linejoin="round"/><path d="M8 8h8M8 12h8M8 16h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>摘要</span>
+      <span class="sbadge sbadge-forward" id="bForward" style="display:none"><svg viewBox="0 0 24 24"><path d="M22 2L11 13" stroke="currentColor" stroke-linecap="round" fill="none" stroke-width="1.5"/><path d="M22 2L15 22L11 13L2 9L22 2Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" fill="none" stroke-width="1.5"/></svg><span id="sForward">轉發</span></span>
     </div>
     <div class="sbar-right"><span id="sCount">0 句</span><div class="vol-bar" id="volBar"></div></div>
   </div>
   <div class="msgs" id="msgs"></div>
-  <div class="bar"><div><button class="stop-btn" id="stopBtn" onclick="stop()">停止 <kbd>S</kbd></button><button class="stop-btn" id="pauseBtn" onclick="togglePause()" style="background:var(--orange);margin-left:8px">暫停 <kbd>P</kbd></button><span class="bar-info" id="bInfo"></span><span class="bar-info" id="bDevices" style="margin-left:8px"></span><span id="bBarBadges" style="margin-left:8px;display:inline-flex;gap:4px"><span class="sbadge sbadge-rec" id="bRec" style="display:none"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="6" fill="currentColor" stroke="none"/></svg>錄音中</span><span class="sbadge sbadge-denoise" id="bDenoise" style="display:none"><svg viewBox="0 0 24 24"><path d="M2 12C2 6.5 6.5 2 12 2M22 12C22 17.5 17.5 22 12 22M8 12C8 9.8 9.8 8 12 8M16 12C16 14.2 14.2 16 12 16" stroke="currentColor" stroke-linecap="round"/></svg>降噪</span></span></div><div><button class="mode-toggle" id="subBtn" onclick="toggleSubMode()">字幕模式 <kbd>T</kbd></button><button class="new-btn" id="newBtn" onclick="toEnd()">新訊息 ↓</button></div></div>
+  <div class="bar"><div><button class="stop-btn" id="stopBtn" onclick="stop()">停止 <kbd>S</kbd></button><button class="stop-btn" id="pauseBtn" onclick="togglePause()" style="background:var(--orange);margin-left:8px">暫停 <kbd>P</kbd></button><span class="bar-info" id="bInfo"></span><span class="bar-info" id="bDevices" style="margin-left:8px"></span><span id="bBarBadges" style="margin-left:8px;display:inline-flex;gap:4px"><span class="sbadge sbadge-rec" id="bRec" style="display:none"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="6" fill="currentColor" stroke="none"/></svg>錄音中</span><span class="sbadge sbadge-denoise" id="bDenoise" style="display:none"><svg viewBox="0 0 24 24"><path d="M2 12C2 6.5 6.5 2 12 2M22 12C22 17.5 17.5 22 12 22M8 12C8 9.8 9.8 8 12 8M16 12C16 14.2 14.2 16 12 16" stroke="currentColor" stroke-linecap="round"/></svg>降噪</span><span class="sbadge" id="bOvReopen" style="display:none;background:rgba(0,188,212,.12);color:#00bcd4;cursor:pointer" onclick="reopenOverlay()" title="重新開啟懸浮字幕視窗"><svg viewBox="0 0 24 24" style="width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:1.5"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M6 14h4M11 14h7M6 18h12" stroke-linecap="round"/></svg>懸浮字幕</span></span></div><div><button class="mode-toggle" id="subBtn" onclick="toggleSubMode()">字幕模式 <kbd>T</kbd></button><button class="new-btn" id="newBtn" onclick="toEnd()">新訊息 ↓</button></div></div>
 </div>
 <script>
 const $=id=>document.getElementById(id),msgsEl=$('msgs'),dot=$('dot'),newBtn=$('newBtn');
@@ -317,7 +458,26 @@ let _autoLb='',_autoMic='';
 let _lastStartBody=null,_allDevices=[],_isSwitching=false,_curDeviceId=null,_curMicDeviceId=null;
 let _asrItemsCache=null,_asrLastVal='';
 let _recModels={},_cfgModels=[],_lastModel='';
-function _updateModelRec(mode){const recM=_recModels[mode]||'large-v3-turbo';const prev=cselVal($('iModel'));cselSetItems($('iModel'),_cfgModels.map(m=>{let t=tagFor(m.value,recM,_lastModel);if(m.value===recM&&t!=='前次使用')t='此裝置適合';return{value:m.value,label:m.label,tag:t}}));cselSetValue($('iModel'),prev||_lastModel||recM)}
+function _updateModelRec(mode){
+  const recM=_recModels[mode]||'large-v3-turbo';const prev=cselVal($('iModel'));
+  const noEng=['zh','zh2en','zh2ja','ja2zh','ja','en_zh','ja_zh'];
+  const isNoEng=noEng.includes(mode);
+  // 模型大小排序（用於判斷效能需求）
+  const _mOrder={'base.en':0,'base':1,'small.en':2,'small':3,'medium.en':4,'medium':5,'large-v3-turbo':6,'large-v3':7};
+  const recIdx=_mOrder[recM]??6;
+  cselSetItems($('iModel'),_cfgModels.map(m=>{
+    const isEnOnly=m.value.endsWith('.en');
+    if(isNoEng&&isEnOnly)return{value:m.value,label:m.label,tag:'不支援此模式',disabled:true};
+    let t=tagFor(m.value,recM,_lastModel);
+    if(m.value===recM&&t!=='前次使用')t='此裝置適合';
+    else if((_mOrder[m.value]??0)>recIdx&&!t)t='此裝置速度可能較慢';
+    return{value:m.value,label:m.label,tag:t};
+  }));
+  // 如果目前選的模型被停用，自動切到推薦模型
+  const curVal=prev||_lastModel||recM;
+  if(isNoEng&&curVal.endsWith('.en'))cselSetValue($('iModel'),recM);
+  else cselSetValue($('iModel'),curVal);
+}
 const _modeLabels={'en2zh':'英翻中字幕','zh2en':'中翻英字幕','ja2zh':'日翻中字幕','zh2ja':'中翻日字幕','en_zh':'英中雙向字幕','ja_zh':'日中雙向字幕','en':'英文轉錄','zh':'中文轉錄','ja':'日文轉錄','record':'純錄音'};
 const _spkColors=['#ffa550','#64c8ff','#ff96b4','#b4e664','#bea0ff','#fff064','#64f0c8','#ffb4a0'];
 /* Custom Select */
@@ -338,8 +498,8 @@ function bc(s){return s<2?'bf':s<5?'bm':'bs'}
 function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML}
 msgsEl.addEventListener('scroll',()=>{const{scrollTop,scrollHeight,clientHeight}=msgsEl;const wasAtBottom=aScr;aScr=(scrollHeight-scrollTop-clientHeight)<50;if(!wasAtBottom&&aScr)newBtn.classList.remove('vis');else if(!aScr)newBtn.classList.add('vis')});
 function toEnd(){msgsEl.scrollTop=msgsEl.scrollHeight;aScr=true;newBtn.classList.remove('vis')}
-function startTimer(){startTime=Date.now();if(timerIv)clearInterval(timerIv);timerIv=setInterval(()=>{const s=Math.floor((Date.now()-startTime)/1000);$('sTimer').textContent=String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0')},1000)}
-function stopTimer(){if(timerIv){clearInterval(timerIv);timerIv=null}}
+function startTimer(){startTime=Date.now();const el=$('hTimer');el.style.display='';el.dataset.bg='88:88';if(timerIv)clearInterval(timerIv);timerIv=setInterval(()=>{const t=Math.floor((Date.now()-startTime)/1000);const h=Math.floor(t/3600),m=Math.floor((t%3600)/60),s=t%60;const txt=h>0?(h+':'+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0')):(String(m).padStart(2,'0')+':'+String(s).padStart(2,'0'));el.textContent=txt;el.dataset.bg=txt.replace(/[0-9]/g,'8')},1000)}
+function stopTimer(){if(timerIv){clearInterval(timerIv);timerIv=null}$('hTimer').style.display='none'}
 let volHist=new Array(20).fill(0);
 function pushVol(v){volHist.push(Math.min(Math.pow(v*20,.6),1));if(volHist.length>20)volHist.shift();const el=$('volBar');el.innerHTML='';volHist.forEach(v=>{const s=document.createElement('span');s.style.height=Math.max(1,v*18)+'px';el.appendChild(s)})}
 pushVol(0);
@@ -349,8 +509,11 @@ const _modelDesc={'qwen2.5:14b':'品質好，速度快（推薦）','qwen2.5:32b
 function _llmLabel(n){const d=_modelDesc[n];return d?n+' — '+d:n}
 function _llmItems(models,lastV){return models.sort((a,b)=>a.localeCompare(b)).map(m=>({value:m,label:_llmLabel(m),tag:m===lastV?'前次使用':''}))}
 let _selectedFiles=[];
+function _cfgStep(t){const el=$('cfgLoadingText');if(el)el.textContent=t}
 async function loadCfg(){
+  _cfgStep('取得伺服器設定...');
   const r=await fetch('/api/config',{headers:_authHeaders()}),c=await r.json();$('verLabel').textContent='v'+(c.version||'');const L=c.last||{};
+  _cfgStep('載入輸入來源與辨識模式...');
   // Source
   cselSetItems($('iSource'),[{value:'live',label:'即時音訊擷取',tag:''},{value:'file',label:'讀入音訊檔案（離線處理）',tag:''}]);
   cselSetValue($('iSource'),'live');$('iSource').addEventListener('change',onSourceChg);
@@ -361,6 +524,7 @@ async function loadCfg(){
   const asrI=[{value:'gpu',label:'GPU 伺服器'+(c.gpu_host?' ('+c.gpu_host+')':''),tag:''},{value:'local',label:'本機',tag:''}];
   cselSetItems($('iAsrLoc'),asrI);_asrItemsCache=asrI;_asrLastVal=L.local_asr?'local':(c.gpu_host?'gpu':'local');cselSetValue($('iAsrLoc'),_asrLastVal);
   // Model, Scene, Engine
+  _cfgStep('載入辨識模型與翻譯引擎...');
   _recModels=c.recommended_models||{};_cfgModels=c.models;_lastModel=L.model;
   _updateModelRec(cselVal($('iMode')));
   cselSetItems($('iScene'),c.scenes.map(s=>({value:s.value,label:s.label,tag:tagFor(s.value,'training',L.scene)})));cselSetValue($('iScene'),L.scene||'training');
@@ -374,6 +538,7 @@ async function loadCfg(){
   cselSetItems($('iDevice'),devI);cselSetValue($('iDevice'),'');cselSetItems($('iMicDev'),devI);cselSetValue($('iMicDev'),'');
   if(c.gpu_host){/*keep gpu*/}else{cselSetValue($('iAsrLoc'),'local')}
   // 顯示自動偵測的裝置
+  _cfgStep('偵測音訊裝置...');
   _allDevices=c.devices||[];
   _autoLb=c.auto_loopback?c.auto_loopback.replace(/^\[\d+\]\s*/,''):'';
   _autoMic=c.auto_mic?c.auto_mic.replace(/^\[\d+\]\s*/,''):'';
@@ -384,6 +549,8 @@ async function loadCfg(){
   if(L.diarize){$('iDiarize').checked=true;onDiarizeChg()}
   if(L.num_speakers>0)$('iNumSpk').value=L.num_speakers;
   if(L.summarize){$('iSummarize').checked=true;if(L.summary_rounds>1)$('iSumRounds').value=L.summary_rounds;onSummarizeChg()}
+  if(L.gen_srt===false)$('iGenSrt').checked=false;
+  if(L.gen_vtt===false)$('iGenVtt').checked=false;
   if(c.summary_descs)_sumDescs=c.summary_descs;
   _updateSumModels(c.llm_models.map(m=>m.value));cselSetValue($('iSumModel'),L.summary_model||'');
   engChg();$('iMode').addEventListener('change',()=>{engChg();_updateModelRec(cselVal($('iMode')))});$('iEngine').addEventListener('change',engChg);$('iAsrLoc').addEventListener('change',()=>{const v=cselVal($('iAsrLoc'));if(v&&!['en_zh','ja_zh'].includes(cselVal($('iMode'))))_asrLastVal=v;engChg()});
@@ -395,12 +562,23 @@ async function loadCfg(){
     return;
   }
   if(st.running)showLive();
-  // 安全設定（僅本機顯示）
+  // 安全設定 + 懸浮字幕 + 字幕轉發（僅本機顯示）
   if(c.is_local){
+    _cfgStep('載入安全設定...');
     $('rSecurity').style.display='';
     try{const pr=await fetch('/api/passwords');if(pr.ok){const pw=await pr.json();$('iPwRead').value=pw.read||'';$('iPwAdmin').value=pw.admin||''}}catch(e){}
+    _cfgStep('載入關鍵字通知設定...');
+    $('rKeyword').style.display='';
+    try{const kr=await fetch('/api/keyword-config',{headers:_authHeaders()});if(kr.ok){const kc=await kr.json();_loadKwConfig(kc)}}catch(e){}
+    _requestNotifPerm();
+    _cfgStep('載入懸浮字幕設定...');
+    $('rOverlay').style.display='';
+    try{const or2=await fetch('/api/overlay-config',{headers:_authHeaders()});if(or2.ok){const oc=await or2.json();_loadOvConfig(oc)}}catch(e){}
+    _cfgStep('載入字幕轉發設定...');
+    $('rForward').style.display='';
+    try{const fr=await fetch('/api/forward-config',{headers:_authHeaders()});if(fr.ok){const fc=await fr.json();_loadFwdConfig(fc)}}catch(e){}
   }
-  $('cfgLoading').style.display='none';$('cfgCard').style.opacity='1';
+  $('cfgLoading').style.display='none';$('cfgCard').style.opacity='1';initCollapsible();
 }
 function onSourceChg(){const isFile=cselVal($('iSource'))==='file';$('fileArea').classList.toggle('show',isFile);$('rDevices').style.display=isFile?'none':'';$('rScene').style.display=isFile?'none':'';$('rOffline').style.display=isFile?'':'none';$('rAsrLoc').style.display=isFile?'':'';$('iDenoise').parentElement.style.display=isFile?'none':'';$('iRec').parentElement.style.display=isFile?'none':'';$('iMic').parentElement.style.display=isFile?'none':'';$('asrHint').textContent=isFile?'選擇辨識模式與引擎。雙向模式建議使用耳麥避免影響。':'選擇辨識模式與引擎。雙向模式建議使用耳麥避免影響。場景的緩衝長度越長句子越完整，越短反應越即時。';if(isFile)loadFiles()}
 function onDiarizeChg(){$('rNumSpk').style.display=$('iDiarize').checked?'':'none'}
@@ -488,10 +666,10 @@ async function go(){
   if(isFile&&$('iSummarize').checked&&!$('iLlmHost').value.trim()){showToast('產生摘要需要 LLM 伺服器，請填寫 LLM 主機地址','err');return}
   // 檢查是否已在執行
   try{const st=await(await fetch('/api/status',{headers:_authHeaders()})).json();if(st.running){showToast('已有處理正在執行中，請先停止再重新啟動','err');return}}catch(e){}
-  curCfg={mode,modeLabel:_modeLabels[mode]||mode,model:cselVal($('iModel')),engine:eng,asrLoc,isFile,record:$('iRec').checked,denoise:$('iDenoise').checked,mic:$('iMic').checked,diarize:isFile&&$('iDiarize').checked,summarize:isFile&&$('iSummarize').checked};
+  curCfg={mode,modeLabel:_modeLabels[mode]||mode,model:cselVal($('iModel')),engine:eng,asrLoc,isFile,record:$('iRec').checked,denoise:$('iDenoise').checked,mic:$('iMic').checked,diarize:isFile&&$('iDiarize').checked,summarize:isFile&&$('iSummarize').checked,subtitle_overlay:$('iOvEnable')&&$('iOvEnable').checked};
   $('goBtn').disabled=true;$('goBtn').textContent='啟動中...';
-  try{const b={mode,model:cselVal($('iModel')),scene:cselVal($('iScene')),engine:cselVal($('iEngine')),llm_model:cselVal($('iLlmModel')),llm_host:$('iLlmHost').value,topic:$('iTopic').value,record:$('iRec').checked,mic:$('iMic').checked,denoise:$('iDenoise').checked,local_asr:cselVal($('iAsrLoc'))==='local',device:cselVal($('iDevice'))||null};
-  if(isFile&&_selectedFiles.length){b.input_files=_selectedFiles;if($('iDiarize').checked){b.diarize=true;const ns=parseInt($('iNumSpk').value)||0;if(ns>0)b.num_speakers=ns}if($('iSummarize').checked){b.summarize=true;const sm=cselVal($('iSumModel'));if(sm)b.summary_model=sm;const sr=parseInt($('iSumRounds').value)||1;if(sr>1)b.summary_rounds=sr}}
+  try{const b={mode,model:cselVal($('iModel')),scene:cselVal($('iScene')),engine:cselVal($('iEngine')),llm_model:cselVal($('iLlmModel')),llm_host:$('iLlmHost').value,topic:$('iTopic').value,record:$('iRec').checked,mic:$('iMic').checked,denoise:$('iDenoise').checked,local_asr:cselVal($('iAsrLoc'))==='local',device:cselVal($('iDevice'))||null,subtitle_overlay:$('iOvEnable')&&$('iOvEnable').checked,fwd_enabled:$('iFwdEnable')&&$('iFwdEnable').checked,kw_enabled:$('iKwEnable')&&$('iKwEnable').checked};
+  if(isFile&&_selectedFiles.length){b.input_files=_selectedFiles;if($('iDiarize').checked){b.diarize=true;const ns=parseInt($('iNumSpk').value)||0;if(ns>0)b.num_speakers=ns}if($('iSummarize').checked){b.summarize=true;const sm=cselVal($('iSumModel'));if(sm)b.summary_model=sm;const sr=parseInt($('iSumRounds').value)||1;if(sr>1)b.summary_rounds=sr}if(!$('iGenSrt').checked)b.no_srt=true;if(!$('iGenVtt').checked)b.no_vtt=true}
   const r=await fetch('/api/start',{method:'POST',headers:_authHeaders(),body:JSON.stringify(b)});const d=await r.json();
   if(d.status==='started'){_lastStartBody=JSON.parse(JSON.stringify(b));_curDeviceId=b.device;showLive();$('hMode').textContent=curCfg.modeLabel}}catch(e){showToast('啟動失敗: '+e.message,'err')}
   $('goBtn').disabled=false;$('goBtn').textContent='開始';
@@ -525,7 +703,7 @@ function _showLiveIn(live){
   document.body.classList.add('has-live');
   requestAnimationFrame(()=>requestAnimationFrame(()=>live.classList.add('shown')));
   const isBidi=['en_zh','ja_zh'].includes(curCfg.mode);$('pLive').classList.toggle('bidi',isBidi);
-  msgsEl.innerHTML='';cnt=0;_discShown=false;_outputFiles=[];_outputDirs=[];$('hCount').textContent='';$('sCount').textContent='0 句';
+  msgsEl.innerHTML='';cnt=0;_discShown=false;_outputFiles=[];_outputDirs=[];$('sCount').textContent='0 句';
   $('hMode').textContent=curCfg.modeLabel||curCfg.mode;$('hSource').textContent=curCfg.isFile?'離線處理':'即時模式';$('sMode').textContent=curCfg.modeLabel||curCfg.mode;
   $('sModel').textContent=(curCfg.model?(curCfg.asrLoc+' '+curCfg.model):'');
   const hasEng=curCfg.engine&&!['en','zh','ja','record'].includes(curCfg.mode);
@@ -539,6 +717,16 @@ function _showLiveIn(live){
   $('bRec').style.display=!curCfg.isFile&&curCfg.record?'inline-flex':'none';$('bDenoise').style.display=!curCfg.isFile&&curCfg.denoise?'inline-flex':'none';$('bMic').style.display=!curCfg.isFile&&curCfg.mic?'inline-flex':'none';
   $('bDiarize').style.display=curCfg.diarize?'inline-flex':'none';
   if(curCfg.summarize){$('bSummarize').style.display='inline-flex';$('bSummarize').lastChild.textContent='摘要'}else{$('bSummarize').style.display='none'}
+  // 字幕轉發膠囊
+  if($('iFwdEnable')&&$('iFwdEnable').checked){
+    const _fwdMap={Tg:'TG',Slack:'Slack',Discord:'Discord',Teams:'Teams',Line:'LINE',Nctalk:'NC Talk',Custom:'API'};
+    const _fwdActive=[];
+    Object.keys(_fwdMap).forEach(k=>{const el=$('iFwd'+k);if(el&&el.checked)_fwdActive.push(_fwdMap[k])});
+    if(_fwdActive.length){$('bForward').style.display='inline-flex';$('sForward').textContent='轉發 '+_fwdActive.join('+')}
+    else{$('bForward').style.display='none'}
+  }else{$('bForward').style.display='none'}
+  // 懸浮字幕重開按鈕
+  $('bOvReopen').style.display=curCfg.subtitle_overlay?'inline-flex':'none';
   // 裝置資訊（可點按膠囊，靜音/恢復）— 檔案模式不顯示
   let _dvh='';
   if(!curCfg.isFile){
@@ -564,7 +752,7 @@ function showSetup(){if(_authRole==='read'){$('pLive').classList.remove('shown')
     setup.style.display='flex';setup.classList.add('fade-out');
     requestAnimationFrame(()=>requestAnimationFrame(()=>setup.classList.remove('fade-out')));
   },300);
-  dot.classList.remove('on');$('hMode').textContent='--';$('hCount').textContent='';stopTimer()}
+  dot.classList.remove('on');$('hMode').textContent='--';stopTimer()}
 let _outputFiles=[],_outputDirs=[];
 async function openOutputFolder(){
   if(!_outputDirs.length)return;
@@ -620,7 +808,7 @@ function showDisconnected(msg){
 let _msgQueue=[],_msgTimer=null;
 function _flushMsgs(){_msgTimer=null;while(_msgQueue.length){_renderMsg(_msgQueue.shift())}}
 function addMsg(ev){_msgQueue.push(ev);if(!_msgTimer)_msgTimer=setTimeout(_flushMsgs,80)}
-function _renderMsg(ev){dot.classList.add('on');cnt++;$('hCount').textContent=cnt+' 句';$('sCount').textContent=cnt+' 句';if(ev.rms!=null)pushVol(ev.rms);const isO=(ev.source==='loopback'||ev.source==='main');const d=document.createElement('div');d.className='m '+(isO?'o':'s');
+function _renderMsg(ev){dot.classList.add('on');if(cnt===0)$('bInfo').textContent='';cnt++;$('sCount').textContent=cnt+' 句';if(ev.rms!=null)pushVol(ev.rms);const isO=(ev.source==='loopback'||ev.source==='main');const d=document.createElement('div');d.className='m '+(isO?'o':'s');
   let asrBadge=ev.asr_time!=null?'<span class="b '+bc(ev.asr_time)+'">辨 '+ev.asr_time+'s</span> ':'';
   let trBadge=ev.translate_time!=null?'<span class="b '+bc(ev.translate_time)+'">譯 '+ev.translate_time+'s</span> ':'';
   const spkHtml=ev.speaker?'<div><span class="m-spk" style="background:'+_spkColors[(ev.speaker-1)%8]+'">Speaker '+ev.speaker+'</span></div>':'';
@@ -639,7 +827,7 @@ function _renderMsg(ev){dot.classList.add('on');cnt++;$('hCount').textContent=cn
   if(aScr)requestAnimationFrame(()=>{msgsEl.scrollTop=msgsEl.scrollHeight})}
 /* WS */
 function conn(){const p=location.protocol==='https:'?'wss:':'ws:';const _wsUrl=p+'//'+location.host+'/ws'+(_authToken?'?token='+encodeURIComponent(_authToken):'');ws=new WebSocket(_wsUrl);ws.onopen=()=>{if(rTimer){clearInterval(rTimer);rTimer=null}};
-  ws.onmessage=e=>{try{const ev=JSON.parse(e.data);if(ev.type==='transcription')addMsg(ev);else if(ev.type==='started'){curCfg.modeLabel=_modeLabels[ev.mode]||ev.mode;curCfg.mode=ev.mode;if(!_isSwitching){showLive()}dot.classList.add('on')}else if(ev.type==='stopped'&&!_isSwitching)showSetup();else if(ev.type==='disconnected'){if(_isSwitching)return;dot.classList.remove('on');showDisconnected(ev.message||'主程式已結束')}else if(ev.type==='switching'){$('bInfo').textContent=ev.message||'切換中...'}else if(ev.type==='rms'&&ev.value!=null)pushVol(ev.value);else if(ev.type==='output_files'){_outputFiles=ev.files||[];_outputDirs=ev.dirs||[]}else if(ev.type==='correction'){addCorrection(ev)}else if(ev.type==='progress'){$('bInfo').textContent=ev.stage+(ev.detail?' — '+ev.detail:'')}}catch(x){}};
+  ws.onmessage=e=>{try{const ev=JSON.parse(e.data);if(ev.type==='transcription')addMsg(ev);else if(ev.type==='started'){curCfg.modeLabel=_modeLabels[ev.mode]||ev.mode;curCfg.mode=ev.mode;if(!_isSwitching){showLive()}dot.classList.add('on')}else if(ev.type==='stopped'&&!_isSwitching)showSetup();else if(ev.type==='disconnected'){if(_isSwitching)return;dot.classList.remove('on');showDisconnected(ev.message||'主程式已結束')}else if(ev.type==='switching'){$('bInfo').textContent=ev.message||'切換中...'}else if(ev.type==='rms'&&ev.value!=null)pushVol(ev.value);else if(ev.type==='output_files'){_outputFiles=ev.files||[];_outputDirs=ev.dirs||[]}else if(ev.type==='keyword_alert'){_handleKeywordAlert(ev)}else if(ev.type==='correction'){addCorrection(ev)}else if(ev.type==='progress'){$('bInfo').textContent=ev.stage+(ev.detail?' — '+ev.detail:'')}}catch(x){}};
   ws.onclose=()=>{dot.classList.remove('on');if($('pLive').classList.contains('on')&&!_discShown){_discShown=true;showDisconnected('與伺服器的連線已中斷')}if(!rTimer)rTimer=setInterval(()=>{if(!ws||ws.readyState===WebSocket.CLOSED)conn()},3000)};ws.onerror=()=>ws.close()}
 // Tooltips
 const _tips={
@@ -663,7 +851,9 @@ const _tips={
   // 離線處理
   iDiarize:'啟用講者辨識，區分不同發言者（需 resemblyzer + spectralcluster）',
   iNumSpk:'指定講者人數，0 為自動偵測（2~8 位）。已知人數時建議填入可提升精準度',
-  iSummarize:'離線處理完成後自動產生 AI 摘要（需 LLM 伺服器）',
+  iSummarize:'離線處理完成後自動產生 AI 摘要與校正逐字稿（需 LLM 伺服器）',
+  iGenSrt:'產生 SRT 字幕檔（可匯入影片編輯軟體或播放器）',
+  iGenVtt:'產生 WebVTT 字幕檔（網頁播放器 <track> 標籤用）',
   iSumModel:'選擇摘要用的 LLM 模型，建議使用 120B 以上大模型',
   iSumRounds:'LLM 產生摘要的次數。多次處理後整合可提升品質，避免單次結果異常',
   // 其他設定
@@ -675,6 +865,35 @@ const _tips={
   iPwRead:'遠端觀看字幕用密碼。空白表示不需密碼即可觀看',
   iPwAdmin:'遠端管理用密碼。空白表示不啟用遠端管理功能',
   // 按鈕
+  iKwEnable:'啟用後，即時辨識出現指定關鍵字時發出通知',
+  iKwWords:'每行一個關鍵字，不分大小寫，同時比對原文和譯文',
+  iKwCooldown:'同一關鍵字在冷卻時間內不重複通知（秒）',
+  iKwBrowser:'透過瀏覽器推播通知（首次需授權）',
+  iKwSound:'播放短促提示音效',
+  iKwOverlay:'懸浮字幕視窗邊框閃爍提示（需啟用懸浮字幕）',
+  iOvEnable:'啟用後，螢幕上會顯示半透明字幕覆蓋視窗（需安裝 PyQt6）',
+  iOvFont:'選擇字幕字型（僅列出支援中文的字型，點按載入清單）',
+  iOvFontSrc:'原文基準字體大小，啟用自動縮放時為最大值',
+  iOvFontDst:'譯文基準字體大小，啟用自動縮放時為最大值',
+  iOvOpacity:'字幕背景透明度（數值越大越不透明）',
+  iOvAutoScale:'文字超出視窗時自動縮小，拉大視窗時自動放大',
+  iOvClickThrough:'啟用後滑鼠事件會穿透字幕視窗到下方應用程式',
+  iOvSingleLine:'純轉錄模式（無翻譯）時只顯示單行字幕',
+  iFwdEnable:'啟用後，即時辨識的字幕會自動轉發到選定的通訊平台',
+  iFwdInterval:'每隔幾秒發送一次累積的字幕（最低 5 秒，避免被封鎖）',
+  iFwdTgToken:'Telegram Bot Token（從 @BotFather 取得）',
+  iFwdTgChat:'Telegram 頻道或群組的 Chat ID',
+  iFwdSlackUrl:'Slack Incoming Webhook URL',
+  iFwdDiscordUrl:'Discord Webhook URL（頻道設定 → 整合 → Webhook）',
+  iFwdTeamsUrl:'Teams Incoming Webhook URL（Power Automate 或舊版 Connector）',
+  iFwdLineToken:'LINE Messaging API 的 Channel Access Token（LINE Developers Console 取得）',
+  iFwdLineTarget:'LINE 群組 ID（C 開頭）或使用者 ID，可從 Webhook 事件取得',
+  iFwdNctalkUrl:'Nextcloud 伺服器網址（如 https://cloud.example.com）',
+  iFwdNctalkRoom:'Nextcloud Talk 對話的 token（對話網址最後一段）',
+  iFwdNctalkUser:'Nextcloud 登入帳號',
+  iFwdNctalkPass:'Nextcloud 應用程式密碼（設定 → 安全性 → 應用程式密碼，非登入密碼）',
+  iFwdCustomUrl:'自訂 API 端點，字幕以 POST body（純文字）發送',
+  iFwdCustomHeaders:'自訂 HTTP Headers，JSON 格式（如 Authorization）',
   goBtn:'啟動即時辨識或離線處理',
   stopBtn:'停止目前的辨識工作（按兩次確認，快捷鍵 S）',
   pauseBtn:'暫停或繼續辨識（快捷鍵 P）',
@@ -703,6 +922,216 @@ function _showAuthDialog(title,hint,showSkip){
 const _eyeOn='<svg viewBox="0 0 24 24" style="width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.5;vertical-align:middle"><path d="M1 12C1 12 5 4 12 4C19 4 23 12 23 12C23 12 19 20 12 20C5 20 1 12 1 12Z"/><circle cx="12" cy="12" r="3"/></svg>';
 const _eyeOff='<svg viewBox="0 0 24 24" style="width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.5;vertical-align:middle"><path d="M17.94 17.94A10.07 10.07 0 0112 20C5 20 1 12 1 12A18.45 18.45 0 015.06 6.06M9.9 4.24A9.12 9.12 0 0112 4C19 4 23 12 23 12A18.5 18.5 0 0119.18 16.76"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
 function togglePwVis(id,btn){const inp=$(id);if(inp.type==='password'){inp.type='text';btn.innerHTML=_eyeOff}else{inp.type='password';btn.innerHTML=_eyeOn}}
+// 收摺/展開設定區塊
+function initCollapsible(){
+  document.querySelectorAll('.sec-title').forEach(title=>{
+    // 加 chevron icon
+    const chev=document.createElementNS('http://www.w3.org/2000/svg','svg');
+    chev.setAttribute('viewBox','0 0 24 24');chev.setAttribute('class','chevron');
+    chev.innerHTML='<polyline points="6 9 12 15 18 9" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>';
+    title.appendChild(chev);
+    // 把 sec-title 之後的所有同層元素包到 sec-body
+    const sec=title.parentElement;
+    const body=document.createElement('div');body.className='sec-body';
+    let sib=title.nextElementSibling;
+    const hint=sib&&sib.classList.contains('sec-hint')?sib:null;
+    // sec-hint 留在外面（收摺時也能看到提示）
+    const children=[];
+    let node=hint?hint.nextElementSibling:title.nextElementSibling;
+    while(node){children.push(node);node=node.nextElementSibling}
+    children.forEach(c=>body.appendChild(c));
+    sec.appendChild(body);
+    // 點擊切換
+    let _animating=false;
+    title.addEventListener('click',()=>{
+      if(_animating)return;_animating=true;
+      if(sec.classList.contains('collapsed')){
+        sec.classList.remove('collapsed');
+        body.style.overflow='hidden';
+        body.style.maxHeight=body.scrollHeight+'px';
+        setTimeout(()=>{if(!sec.classList.contains('collapsed')){body.style.maxHeight='none';body.style.overflow='visible'}_animating=false},300);
+      }else{
+        body.style.overflow='hidden';
+        body.style.maxHeight=body.scrollHeight+'px';
+        requestAnimationFrame(()=>{requestAnimationFrame(()=>{
+          sec.classList.add('collapsed');
+          body.style.maxHeight='0';
+          setTimeout(()=>{_animating=false},300);
+        })});
+      }
+    });
+    body.style.maxHeight='none';
+  });
+}
+// 關鍵字通知
+function toggleKwArea(){$('kwArea').style.display=$('iKwEnable').checked?'':'none'}
+function _loadKwConfig(kc){
+  if(!kc)return;
+  $('iKwEnable').checked=!!kc.enabled;toggleKwArea();
+  if(kc.keywords)$('iKwWords').value=(kc.keywords||[]).join('\n');
+  if(kc.cooldown)$('iKwCooldown').value=kc.cooldown;
+  if(kc.browser_notify!==undefined)$('iKwBrowser').checked=!!kc.browser_notify;
+  if(kc.sound!==undefined)$('iKwSound').checked=!!kc.sound;
+  if(kc.sound_style)$('iKwSoundStyle').value=kc.sound_style;
+  _kwSoundStyle=kc.sound_style||'alert';
+  if(kc.overlay_flash!==undefined)$('iKwOverlay').checked=!!kc.overlay_flash;
+}
+async function saveKw(){
+  const words=$('iKwWords').value.split('\n').map(s=>s.trim()).filter(Boolean);
+  const cfg={enabled:$('iKwEnable').checked,keywords:words,cooldown:parseInt($('iKwCooldown').value)||30,browser_notify:$('iKwBrowser').checked,sound:$('iKwSound').checked,sound_style:$('iKwSoundStyle').value,overlay_flash:$('iKwOverlay').checked};
+  try{const r=await fetch('/api/save-keyword',{method:'POST',headers:{..._authHeaders(),'Content-Type':'application/json'},body:JSON.stringify(cfg)});const d=await r.json();$('kwResult').innerHTML=d.ok?'<span style="color:var(--green)">已儲存（下次啟動生效）</span>':'<span style="color:var(--red)">'+esc(d.error)+'</span>'}catch(e){$('kwResult').innerHTML='<span style="color:var(--red)">'+esc(e.message)+'</span>'}
+}
+// 瀏覽器通知權限
+function _requestNotifPerm(){if('Notification' in window&&Notification.permission==='default')Notification.requestPermission()}
+// 音效產生（短促 beep，不需外部檔案）
+let _kwAudioCtx=null;
+function _playKwBeep(){
+  const style=(_kwSoundStyle||'alert');
+  try{
+    if(!_kwAudioCtx)_kwAudioCtx=new(window.AudioContext||window.webkitAudioContext)();
+    const ctx=_kwAudioCtx,t=ctx.currentTime;
+    if(style==='gentle'){
+      // 柔和三連音
+      const notes=[880,1100,1320];
+      notes.forEach((freq,i)=>{
+        const o=ctx.createOscillator(),g=ctx.createGain();
+        o.connect(g);g.connect(ctx.destination);
+        o.frequency.value=freq;g.gain.value=0.4;
+        o.start(t+i*0.15);g.gain.exponentialRampToValueAtTime(0.01,t+i*0.15+0.25);o.stop(t+i*0.15+0.25);
+      });
+    }else{
+      // 核爆警示音
+      const bass=ctx.createOscillator(),bg=ctx.createGain();
+      bass.type='sawtooth';bass.frequency.value=80;
+      bass.connect(bg);bg.connect(ctx.destination);
+      bg.gain.setValueAtTime(0.15,t);bg.gain.linearRampToValueAtTime(0.25,t+0.3);
+      bg.gain.linearRampToValueAtTime(0,t+1.8);
+      bass.start(t);bass.stop(t+1.8);
+      for(let i=0;i<3;i++){
+        const s=t+i*0.5;
+        const hi=ctx.createOscillator(),hg=ctx.createGain();
+        hi.type='square';hi.frequency.value=920;
+        hi.connect(hg);hg.connect(ctx.destination);
+        hg.gain.setValueAtTime(0.35,s);hg.gain.linearRampToValueAtTime(0,s+0.2);
+        hi.start(s);hi.stop(s+0.2);
+        const lo=ctx.createOscillator(),lg2=ctx.createGain();
+        lo.type='square';lo.frequency.value=580;
+        lo.connect(lg2);lg2.connect(ctx.destination);
+        lg2.gain.setValueAtTime(0.3,s+0.2);lg2.gain.linearRampToValueAtTime(0,s+0.45);
+        lo.start(s+0.2);lo.stop(s+0.45);
+      }
+    }
+  }catch(e){}
+}
+let _kwSoundStyle='alert';
+// 處理關鍵字通知事件
+function _kwFullScreenFlash(keyword){
+  const el=document.createElement('div');el.className='kw-fullscreen';
+  el.innerHTML='<div class="kw-fullscreen-text">⚠ '+esc(keyword).toUpperCase()+'</div>';
+  document.body.appendChild(el);
+  setTimeout(()=>el.remove(),2000);
+}
+function _handleKeywordAlert(ev){
+  // 全螢幕告警閃爍
+  _kwFullScreenFlash(ev.keyword);
+  // 瀏覽器通知
+  if(ev.browser_notify&&'Notification' in window&&Notification.permission==='granted'){
+    new Notification('🔔 關鍵字：'+ev.keyword,{body:ev.context,tag:'kw-'+ev.keyword,requireInteraction:false});
+  }
+  // 音效
+  if(ev.sound){_kwSoundStyle=$('iKwSoundStyle')?$('iKwSoundStyle').value:'alert';_playKwBeep()}
+  // 訊息列高亮標記
+  const badge=document.createElement('div');badge.className='kw-alert';badge.innerHTML='<span class="kw-alert-tag">🔔 '+esc(ev.keyword)+'</span> <span class="kw-alert-ctx">'+esc(ev.context)+'</span>';
+  msgsEl.appendChild(badge);if(aScr)requestAnimationFrame(()=>{msgsEl.scrollTop=msgsEl.scrollHeight});
+}
+// 懸浮字幕
+async function reopenOverlay(){
+  const btn=$('bOvReopen');btn.textContent='啟動中...';
+  try{const r=await fetch('/api/reopen-overlay',{method:'POST',headers:_authHeaders()});const d=await r.json();
+    if(d.ok){btn.innerHTML='<svg viewBox="0 0 24 24" style="width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:1.5"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M6 14h4M11 14h7M6 18h12" stroke-linecap="round"/></svg>懸浮字幕';showToast('懸浮字幕已重新開啟','ok')}
+    else{btn.textContent='懸浮字幕';showToast('啟動失敗：'+d.error,'err')}
+  }catch(e){btn.textContent='懸浮字幕';showToast('啟動失敗','err')}
+}
+let _ovFontsLoaded=false;
+async function loadOvFonts(){
+  if(_ovFontsLoaded)return;_ovFontsLoaded=true;
+  const sel=$('iOvFont');const saved=sel.value;
+  try{
+    const r=await fetch('/api/fonts',{headers:_authHeaders()});
+    if(!r.ok)return;
+    const fonts=await r.json();
+    fonts.forEach(f=>{const o=document.createElement('option');o.value=f;o.textContent=f;sel.appendChild(o)});
+    if(saved)sel.value=saved;
+  }catch(e){}
+}
+function toggleOvArea(){$('ovArea').style.display=$('iOvEnable').checked?'':'none'}
+function _loadOvConfig(oc){
+  if(!oc)return;
+  $('iOvEnable').checked=!!oc.enabled;toggleOvArea();
+  if(oc.font_size_src)$('iOvFontSrc').value=oc.font_size_src;
+  if(oc.font_size_dst)$('iOvFontDst').value=oc.font_size_dst;
+  if(oc.opacity){$('iOvOpacity').value=oc.opacity;$('iOvOpacityRange').value=oc.opacity}
+  if(oc.font_family){$('iOvFont').value=oc.font_family;if(!$('iOvFont').value){const o=document.createElement('option');o.value=oc.font_family;o.textContent=oc.font_family;$('iOvFont').appendChild(o);$('iOvFont').value=oc.font_family}}
+  $('iOvClickThrough').checked=!!oc.click_through;
+  $('iOvSingleLine').checked=!!oc.single_line;
+}
+async function saveOverlay(){
+  const cfg={enabled:$('iOvEnable').checked,font_family:$('iOvFont').value,opacity:parseInt($('iOvOpacity').value)||65,click_through:$('iOvClickThrough').checked,single_line:$('iOvSingleLine').checked};
+  try{const r=await fetch('/api/save-overlay',{method:'POST',headers:{..._authHeaders(),'Content-Type':'application/json'},body:JSON.stringify(cfg)});const d=await r.json();$('ovResult').innerHTML=d.ok?'<span style="color:var(--green)">已儲存（下次啟動生效）</span>':'<span style="color:var(--red)">'+esc(d.error)+'</span>'}catch(e){$('ovResult').innerHTML='<span style="color:var(--red)">'+esc(e.message)+'</span>'}
+}
+function toggleFwdArea(){$('fwdArea').style.display=$('iFwdEnable').checked?'':'none'}
+function toggleFwdCard(name){$('fwd'+name+'Fields').style.display=$('iFwd'+name).checked?'':'none'}
+function _buildFwdConfig(){
+  return {
+    enabled:$('iFwdEnable').checked,
+    interval:parseInt($('iFwdInterval').value)||10,
+    include_timestamp:$('iFwdTs').checked,
+    include_source:$('iFwdSrc').checked,
+    include_translation:$('iFwdDst').checked,
+    platforms:{
+      telegram:{enabled:$('iFwdTg').checked,bot_token:$('iFwdTgToken').value.trim(),chat_id:$('iFwdTgChat').value.trim()},
+      slack:{enabled:$('iFwdSlack').checked,webhook_url:$('iFwdSlackUrl').value.trim()},
+      discord:{enabled:$('iFwdDiscord').checked,webhook_url:$('iFwdDiscordUrl').value.trim()},
+      teams:{enabled:$('iFwdTeams').checked,webhook_url:$('iFwdTeamsUrl').value.trim()},
+      line:{enabled:$('iFwdLine').checked,channel_access_token:$('iFwdLineToken').value.trim(),target_id:$('iFwdLineTarget').value.trim()},
+      nctalk:{enabled:$('iFwdNctalk').checked,url:$('iFwdNctalkUrl').value.trim(),room_token:$('iFwdNctalkRoom').value.trim(),user:$('iFwdNctalkUser').value.trim(),password:$('iFwdNctalkPass').value.trim()},
+      custom:{enabled:$('iFwdCustom').checked,url:$('iFwdCustomUrl').value.trim(),body_template:$('iFwdCustomBody').value.trim(),headers:_parseFwdHeaders()}
+    }
+  }
+}
+function _parseFwdHeaders(){try{const v=$('iFwdCustomHeaders').value.trim();return v?JSON.parse(v):{}}catch(e){return{}}}
+function _loadFwdConfig(fc){
+  if(!fc)return;
+  $('iFwdEnable').checked=!!fc.enabled;toggleFwdArea();
+  $('iFwdInterval').value=fc.interval||10;
+  $('iFwdTs').checked=fc.include_timestamp!==undefined?!!fc.include_timestamp:false;
+  $('iFwdSrc').checked=fc.include_source!==undefined?!!fc.include_source:true;
+  $('iFwdDst').checked=fc.include_translation!==undefined?!!fc.include_translation:true;
+  const p=fc.platforms||{};
+  if(p.telegram){$('iFwdTg').checked=!!p.telegram.enabled;$('iFwdTgToken').value=p.telegram.bot_token||'';$('iFwdTgChat').value=p.telegram.chat_id||'';toggleFwdCard('Tg')}
+  if(p.slack){$('iFwdSlack').checked=!!p.slack.enabled;$('iFwdSlackUrl').value=p.slack.webhook_url||'';toggleFwdCard('Slack')}
+  if(p.discord){$('iFwdDiscord').checked=!!p.discord.enabled;$('iFwdDiscordUrl').value=p.discord.webhook_url||'';toggleFwdCard('Discord')}
+  if(p.teams){$('iFwdTeams').checked=!!p.teams.enabled;$('iFwdTeamsUrl').value=p.teams.webhook_url||'';toggleFwdCard('Teams')}
+  if(p.line){$('iFwdLine').checked=!!p.line.enabled;$('iFwdLineToken').value=p.line.channel_access_token||'';$('iFwdLineTarget').value=p.line.target_id||'';toggleFwdCard('Line')}
+  if(p.nctalk){$('iFwdNctalk').checked=!!p.nctalk.enabled;$('iFwdNctalkUrl').value=p.nctalk.url||'';$('iFwdNctalkRoom').value=p.nctalk.room_token||'';$('iFwdNctalkUser').value=p.nctalk.user||'';$('iFwdNctalkPass').value=p.nctalk.password||'';toggleFwdCard('Nctalk')}
+  if(p.custom){$('iFwdCustom').checked=!!p.custom.enabled;$('iFwdCustomUrl').value=p.custom.url||'';$('iFwdCustomBody').value=p.custom.body_template||'';$('iFwdCustomHeaders').value=p.custom.headers?JSON.stringify(p.custom.headers):'';toggleFwdCard('Custom')}
+}
+async function saveFwd(){
+  const cfg=_buildFwdConfig();
+  try{const r=await fetch('/api/save-forward',{method:'POST',headers:{..._authHeaders(),'Content-Type':'application/json'},body:JSON.stringify(cfg)});const d=await r.json();$('fwdResult').innerHTML=d.ok?'<span style="color:var(--green)">已儲存（下次啟動生效）</span>':'<span style="color:var(--red)">'+esc(d.error)+'</span>'}catch(e){$('fwdResult').innerHTML='<span style="color:var(--red)">'+esc(e.message)+'</span>'}
+}
+async function testFwd(){
+  const cfg=_buildFwdConfig();
+  const actives=Object.entries(cfg.platforms).filter(([,v])=>v.enabled);
+  if(!actives.length){$('fwdResult').innerHTML='<span style="color:var(--red)">請先勾選並設定至少一個平台</span>';return}
+  $('fwdResult').innerHTML='<span style="color:var(--text-dim)">測試中...</span>';
+  const results=[];
+  for(const [name,pcfg] of actives){
+    try{const r=await fetch('/api/test-forward',{method:'POST',headers:{..._authHeaders(),'Content-Type':'application/json'},body:JSON.stringify({platform:name,config:pcfg})});const d=await r.json();results.push(d.ok?name+' ✓':name+' ✗ '+d.error)}catch(e){results.push(name+' ✗ '+e.message)}
+  }
+  const allOk=results.every(r=>r.includes('✓'));
+  $('fwdResult').innerHTML='<span style="color:var('+(allOk?'--green':'--red')+')">'+esc(results.join('、'))+'</span>';
+}
 async function savePw(){
   const r=$('iPwRead').value.trim(),a=$('iPwAdmin').value.trim();
   try{const res=await fetch('/api/save-passwords',{method:'POST',headers:_authHeaders(),body:JSON.stringify({read:r,admin:a})});const d=await res.json();$('pwResult').innerHTML=d.ok?'<span style="color:var(--green)">已儲存</span>':'<span style="color:var(--red)">'+esc(d.error)+'</span>'}catch(e){$('pwResult').innerHTML='<span style="color:var(--red)">'+esc(e.message)+'</span>'}

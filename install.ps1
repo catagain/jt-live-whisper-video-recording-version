@@ -301,7 +301,7 @@ $banner_line = '=' * $cols
 
 Write-Host ""
 Write-Host "${C_TITLE}${banner_line}${NC}"
-Write-Host "${C_TITLE}${BOLD}  jt-live-whisper v2.14.8 - 100% 全地端 AI 語音工具集 - Windows 安裝程式${NC}"
+Write-Host "${C_TITLE}${BOLD}  jt-live-whisper v2.15.3 - 100% 全地端 AI 語音工具集 - Windows 安裝程式${NC}"
 Write-Host "${C_TITLE}  by Jason Cheng (Jason Tools)${NC}"
 Write-Host "${C_TITLE}${banner_line}${NC}"
 Write-Host ""
@@ -348,12 +348,12 @@ if ($Upgrade) {
     if ($localVer -eq $remoteVer) {
         # 版本相同但檢查是否缺少檔案（舊版升級可能漏掉新檔案）
         $missingFiles = @()
-        foreach ($f in @("webui.py","webui.html")) {
+        foreach ($f in @("webui.py","webui.html","subtitle_overlay.py")) {
             if (-not (Test-Path (Join-Path $SCRIPT_DIR $f))) { $missingFiles += $f }
         }
         if ($missingFiles.Count -gt 0) {
             info "版本相同但缺少檔案，補充安裝中..."
-            foreach ($f in @("translate_meeting.py","start.sh","start.ps1","install.sh","install.ps1","SOP.md","webui.py","webui.html")) {
+            foreach ($f in @("translate_meeting.py","start.sh","start.ps1","install.sh","install.ps1","SOP.md","webui.py","webui.html","subtitle_overlay.py")) {
                 $src = Join-Path $repoDir $f
                 if (Test-Path $src) { Copy-Item $src (Join-Path $SCRIPT_DIR $f) -Force }
             }
@@ -388,7 +388,7 @@ if ($Upgrade) {
     $archiveDir = Join-Path $SCRIPT_DIR "versions\v${localVer}"
     if (-not (Test-Path $archiveDir)) {
         New-Item -Path $archiveDir -ItemType Directory -Force | Out-Null
-        foreach ($f in @("translate_meeting.py","start.sh","start.ps1","install.sh","install.ps1","SOP.md","config.json","webui.py","webui.html")) {
+        foreach ($f in @("translate_meeting.py","start.sh","start.ps1","install.sh","install.ps1","SOP.md","config.json","webui.py","webui.html","subtitle_overlay.py")) {
             $src = Join-Path $SCRIPT_DIR $f
             if (Test-Path $src) { Copy-Item $src $archiveDir }
         }
@@ -397,7 +397,7 @@ if ($Upgrade) {
 
     # 更新檔案
     $updated = 0
-    foreach ($f in @("translate_meeting.py","start.sh","start.ps1","install.sh","install.ps1","SOP.md","webui.py","webui.html")) {
+    foreach ($f in @("translate_meeting.py","start.sh","start.ps1","install.sh","install.ps1","SOP.md","webui.py","webui.html","subtitle_overlay.py")) {
         $src = Join-Path $repoDir $f
         if (Test-Path $src) {
             Copy-Item $src (Join-Path $SCRIPT_DIR $f) -Force
@@ -861,6 +861,7 @@ $corePackages = @(
     @("uvicorn",                         "uvicorn（WebUI ASGI 伺服器）"),
     @("websockets",                      "websockets（WebUI 即時通訊）"),
     @("python-multipart",               "python-multipart（WebUI 檔案上傳）"),
+    @("PyQt6",                           "PyQt6（懸浮字幕視窗）"),
     @("argostranslate",                  "Argos Translate（離線翻譯備援）")
 )
 
@@ -1296,12 +1297,14 @@ if ($true) {
                     File = "ggml-large-v3-turbo.bin"
                     Size = "1.5 GB"
                     Url  = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin"
+                    Auto = $true  # 預設自動下載（多語言必備）
                 },
                 @{
                     Name = "large-v3"
                     File = "ggml-large-v3.bin"
                     Size = "3.1 GB"
                     Url  = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3.bin"
+                    Auto = $false
                 }
             )
 
@@ -1310,8 +1313,15 @@ if ($true) {
                 if (Test-Path $mPath) {
                     check_ok "Whisper 模型 $($m.Name) 已存在"
                 } else {
-                    $dlModel = Read-Host "  下載 Whisper 模型 $($m.Name) ($($m.Size))？(Y/n)"
-                    if ($dlModel -ne 'n' -and $dlModel -ne 'N') {
+                    $doDownload = $false
+                    if ($m.Auto) {
+                        info "自動下載 Whisper 模型 $($m.Name)（$($m.Size)，多語言辨識必備）..."
+                        $doDownload = $true
+                    } else {
+                        $dlModel = Read-Host "  下載 Whisper 模型 $($m.Name) ($($m.Size))？(Y/n)"
+                        $doDownload = ($dlModel -ne 'n' -and $dlModel -ne 'N')
+                    }
+                    if ($doDownload) {
                         info "下載中（$($m.Size)）..."
                         try {
                             # 優先用 curl.exe（Windows 10+ 內建，有進度條）
@@ -2327,6 +2337,13 @@ if ($WHISPER_STREAM_EXE -and (Test-Path $WHISPER_STREAM_EXE)) {
     check_ok "whisper.cpp（本機即時辨識）"
 } else {
     info "whisper.cpp 未安裝（離線模式、Moonshine、GPU 伺服器 不受影響）"
+}
+
+# PyQt6
+if (venv_import_ok "PyQt6") {
+    check_ok "PyQt6（懸浮字幕視窗）"
+} else {
+    check_missing "PyQt6 未安裝（pip install PyQt6）"
 }
 
 # ffmpeg

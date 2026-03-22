@@ -196,7 +196,7 @@ spinner_stop() {
 print_title() {
     echo ""
     echo -e "${C_TITLE}============================================================${NC}"
-    echo -e "${C_TITLE}${BOLD}  jt-live-whisper v2.14.8 - 100% 全地端 AI 語音工具集 - 安裝程式${NC}"
+    echo -e "${C_TITLE}${BOLD}  jt-live-whisper v2.15.3 - 100% 全地端 AI 語音工具集 - 安裝程式${NC}"
     echo -e "${C_TITLE}  by Jason Cheng (Jason Tools)${NC}"
     echo -e "${C_TITLE}============================================================${NC}"
     echo ""
@@ -796,6 +796,9 @@ check_venv() {
     if ! python3 -c "import multipart" &>/dev/null 2>&1; then
         missing_pkgs+=("python-multipart")
     fi
+    if ! python3 -c "import PyQt6" &>/dev/null 2>&1; then
+        missing_pkgs+=("PyQt6")
+    fi
 
     # 套件中文說明對照（pip 套件名 → 說明）
     _pkg_label() {
@@ -813,6 +816,7 @@ check_venv() {
             uvicorn)                   echo "uvicorn（WebUI ASGI 伺服器）" ;;
             websockets)                echo "websockets（WebUI 即時通訊）" ;;
             python-multipart)          echo "python-multipart（WebUI 檔案上傳）" ;;
+            PyQt6)                     echo "PyQt6（懸浮字幕視窗）" ;;
             *)                         echo "$1" ;;
         esac
     }
@@ -1246,7 +1250,7 @@ do_upgrade() {
 
     # 更新主要程式檔案
     local files_updated=0
-    for fname in translate_meeting.py start.sh install.sh SOP.md webui.py webui.html; do
+    for fname in translate_meeting.py start.sh install.sh SOP.md webui.py webui.html subtitle_overlay.py; do
         if [ -f "$repo_dir/$fname" ]; then
             cp "$repo_dir/$fname" "$SCRIPT_DIR/$fname"
             ((files_updated++)) || true
@@ -2329,6 +2333,14 @@ verify_installation() {
         check_ok "whisper.cpp（本機即時辨識）"
     else
         echo -e "  ${C_DIM}[略過]${NC} whisper.cpp 未安裝（離線模式、Moonshine、GPU 伺服器不受影響）"
+    fi
+
+    # PyQt6
+    if python3 -c "from PyQt6.QtWidgets import QApplication" &>/dev/null 2>&1; then
+        check_ok "PyQt6（懸浮字幕視窗）"
+    else
+        check_fail "PyQt6 未安裝"
+        ((verify_failed++)) || true
     fi
 
     # ffmpeg

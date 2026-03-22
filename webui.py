@@ -199,6 +199,27 @@ def _stop_proc():
             (BASE_DIR / fn).unlink()
         except Exception:
             pass
+    # 停止懸浮字幕子程序
+    try:
+        if sys.platform == "win32":
+            r = subprocess.run(
+                ["powershell", "-NoProfile", "-Command",
+                 "Get-CimInstance Win32_Process | Where-Object "
+                 "{$_.CommandLine -like '*subtitle_overlay.py*'} | "
+                 "Select-Object -ExpandProperty ProcessId"],
+                capture_output=True, text=True,
+                creationflags=subprocess.CREATE_NO_WINDOW)
+            for line in r.stdout.strip().splitlines():
+                pid = line.strip()
+                if pid.isdigit():
+                    subprocess.run(["taskkill", "/F", "/PID", pid],
+                                   capture_output=True,
+                                   creationflags=subprocess.CREATE_NO_WINDOW)
+        else:
+            subprocess.run(["pkill", "-f", "subtitle_overlay.py"],
+                           capture_output=True)
+    except Exception:
+        pass
 
 
 def _start_proc(args: list):
@@ -225,9 +246,16 @@ def _start_proc(args: list):
         threading.Thread(target=_auto_yes, daemon=True).start()
         # 監控子程序結束，推送斷線事件到瀏覽器
         def _monitor():
-            _proc.wait()
-            rc = _proc.returncode
-            elapsed = time.monotonic() - _proc._start_time if hasattr(_proc, '_start_time') else 999
+            p = _proc  # 保留本地參照，避免 _stop_proc 將 _proc 設為 None
+            if p is None:
+                return
+            start_t = getattr(p, '_start_time', time.monotonic())
+            try:
+                p.wait()
+                rc = p.returncode
+            except Exception:
+                rc = -1
+            elapsed = time.monotonic() - start_t
             if rc != 0 and elapsed < 5:
                 msg = f"啟動失敗（錯誤碼 {rc}），請檢查終端機訊息"
             elif rc != 0:
@@ -376,7 +404,7 @@ def _get_config():
         "gpu_host": gpu_host, "summary_descs": summary_descs,
         "recommended_models": recommended_models,
         "default_engine": "llm" if llm_host else "nllb",
-        "last": last, "version": "2.14.8",
+        "last": last, "version": "2.15.3",
         "has_read_pw": bool(_webui_passwords["read"]),
         "has_admin_pw": bool(_webui_passwords["admin"]),
     }
@@ -435,6 +463,212 @@ async def api_save_passwords(request: Request, body: dict = {}):
         cfg = json.loads(CONFIG_FILE.read_text(encoding="utf-8")) if CONFIG_FILE.exists() else {}
         cfg["webui_passwords"] = {"read": read_pw, "admin": admin_pw}
         CONFIG_FILE.write_text(json.dumps(cfg, ensure_ascii=False, indent=4), encoding="utf-8")
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)})
+    return {"ok": True}
+
+
+@app.get("/api/keyword-config")
+async def api_keyword_config(request: Request):
+    """取得關鍵字通知設定（僅本機）"""
+    if not _is_local(request):
+        return JSONResponse({"ok": False}, status_code=403)
+    cfg = {}
+    if CONFIG_FILE.exists():
+        try:
+            cfg = json.loads(CONFIG_FILE.read_text(encoding="utf-8")).get("keyword_alert", {})
+        except Exception:
+            pass
+    return JSONResponse(cfg)
+
+
+@app.post("/api/save-keyword")
+async def api_save_keyword(request: Request):
+    """儲存關鍵字通知設定（僅本機）"""
+    if not _is_local(request):
+        return JSONResponse({"ok": False, "error": "僅限本機操作"}, status_code=403)
+    body = await request.json()
+    try:
+        cfg = json.loads(CONFIG_FILE.read_text(encoding="utf-8")) if CONFIG_FILE.exists() else {}
+        cfg["keyword_alert"] = body
+        CONFIG_FILE.write_text(json.dumps(cfg, ensure_ascii=False, indent=4), encoding="utf-8")
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)})
+    return {"ok": True}
+
+
+@app.get("/api/overlay-config")
+async def api_overlay_config(request: Request):
+    """取得懸浮字幕設定（僅本機）"""
+    if not _is_local(request):
+        return JSONResponse({"ok": False}, status_code=403)
+    cfg = {}
+    if CONFIG_FILE.exists():
+        try:
+            cfg = json.loads(CONFIG_FILE.read_text(encoding="utf-8")).get("subtitle_overlay", {})
+        except Exception:
+            pass
+    return JSONResponse(cfg)
+
+
+@app.post("/api/save-overlay")
+async def api_save_overlay(request: Request):
+    """儲存懸浮字幕設定（僅本機）"""
+    if not _is_local(request):
+        return JSONResponse({"ok": False, "error": "僅限本機操作"}, status_code=403)
+    body = await request.json()
+    try:
+        cfg = json.loads(CONFIG_FILE.read_text(encoding="utf-8")) if CONFIG_FILE.exists() else {}
+        cfg["subtitle_overlay"] = body
+        CONFIG_FILE.write_text(json.dumps(cfg, ensure_ascii=False, indent=4), encoding="utf-8")
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)})
+    return {"ok": True}
+
+
+@app.get("/api/fonts")
+async def api_fonts(request: Request):
+    """列出系統中支援中文的字型（僅本機）"""
+    if not _is_local(request):
+        return JSONResponse({"ok": False}, status_code=403)
+    try:
+        result = subprocess.run(
+            [sys.executable, "-c",
+             "from PyQt6.QtWidgets import QApplication; from PyQt6.QtGui import QFontDatabase, QFont, QFontMetrics; "
+             "import sys; app = QApplication(sys.argv); "
+             "fonts = []; "
+             "[fonts.append(f) for f in sorted(QFontDatabase.families()) "
+             " if QFontMetrics(QFont(f)).inFont('中')]; "
+             "print('\\n'.join(fonts[:80])); app.quit()"],
+            capture_output=True, text=True, timeout=10
+        )
+        fonts = [f.strip() for f in result.stdout.strip().split("\n") if f.strip()]
+    except Exception:
+        fonts = []
+    return JSONResponse(fonts)
+
+
+@app.post("/api/reopen-overlay")
+async def api_reopen_overlay(request: Request):
+    """重新啟動懸浮字幕子程序（僅本機）"""
+    if not _is_local(request):
+        return JSONResponse({"ok": False, "error": "僅限本機操作"}, status_code=403)
+    try:
+        overlay_script = str(BASE_DIR / "subtitle_overlay.py")
+        config_path = str(CONFIG_FILE)
+        if not Path(overlay_script).is_file():
+            return JSONResponse({"ok": False, "error": "找不到 subtitle_overlay.py"})
+        proc = subprocess.Popen(
+            [sys.executable, overlay_script, "--config", config_path],
+            creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
+        )
+        return {"ok": True, "pid": proc.pid}
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)})
+
+
+@app.get("/api/forward-config")
+async def api_forward_config(request: Request):
+    """取得字幕轉發設定（僅本機）"""
+    if not _is_local(request):
+        return JSONResponse({"ok": False}, status_code=403)
+    cfg = {}
+    if CONFIG_FILE.exists():
+        try:
+            cfg = json.loads(CONFIG_FILE.read_text(encoding="utf-8")).get("subtitle_forward", {})
+        except Exception:
+            pass
+    return JSONResponse(cfg)
+
+
+@app.post("/api/save-forward")
+async def api_save_forward(request: Request):
+    """儲存字幕轉發設定（僅本機）"""
+    if not _is_local(request):
+        return JSONResponse({"ok": False, "error": "僅限本機操作"}, status_code=403)
+    body = await request.json()
+    try:
+        cfg = json.loads(CONFIG_FILE.read_text(encoding="utf-8")) if CONFIG_FILE.exists() else {}
+        cfg["subtitle_forward"] = body
+        CONFIG_FILE.write_text(json.dumps(cfg, ensure_ascii=False, indent=4), encoding="utf-8")
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)})
+    return {"ok": True}
+
+
+def _urlopen_safe(req, timeout=10):
+    """urlopen with SSL fallback"""
+    import ssl as _ssl
+    import urllib.request as _ur2
+    try:
+        return _ur2.urlopen(req, timeout=timeout)
+    except Exception as e:
+        if "SSL" in str(e) or "CERTIFICATE" in str(e).upper():
+            ctx = _ssl.create_default_context()
+            ctx.check_hostname = False
+            ctx.verify_mode = _ssl.CERT_NONE
+            return _ur2.urlopen(req, timeout=timeout, context=ctx)
+        raise
+
+@app.post("/api/test-forward")
+async def api_test_forward(request: Request):
+    """測試字幕轉發（僅本機）"""
+    if not _is_local(request):
+        return JSONResponse({"ok": False, "error": "僅限本機操作"}, status_code=403)
+    import urllib.request as _ur
+    body = await request.json()
+    platform = body.get("platform", "")
+    cfg = body.get("config", {})
+    test_text = "🔔 jt-live-whisper 字幕轉發測試\nThis is a test message."
+    try:
+        if platform == "telegram":
+            url = f"https://api.telegram.org/bot{cfg['bot_token']}/sendMessage"
+            data = json.dumps({"chat_id": cfg["chat_id"], "text": test_text}).encode()
+            req = _ur.Request(url, data=data, headers={"Content-Type": "application/json"})
+            _urlopen_safe(req)
+        elif platform in ("slack", "teams"):
+            data = json.dumps({"text": test_text}).encode()
+            req = _ur.Request(cfg["webhook_url"], data=data, headers={"Content-Type": "application/json"})
+            _urlopen_safe(req)
+        elif platform == "discord":
+            data = json.dumps({"content": test_text}).encode()
+            req = _ur.Request(cfg["webhook_url"], data=data, headers={"Content-Type": "application/json"})
+            _urlopen_safe(req)
+        elif platform == "line":
+            url = "https://api.line.me/v2/bot/message/push"
+            payload = {"to": cfg["target_id"], "messages": [{"type": "text", "text": test_text}]}
+            data = json.dumps(payload).encode()
+            req = _ur.Request(url, data=data, headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {cfg['channel_access_token']}"
+            })
+            _urlopen_safe(req)
+        elif platform == "nctalk":
+            import base64 as _b64
+            base = cfg["url"].rstrip("/")
+            url = f"{base}/ocs/v2.php/apps/spreed/api/v1/chat/{cfg['room_token']}"
+            data = json.dumps({"message": test_text}).encode()
+            cred = _b64.b64encode(f"{cfg['user']}:{cfg['password']}".encode()).decode()
+            req = _ur.Request(url, data=data, headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Basic {cred}",
+                "OCS-APIRequest": "true"
+            })
+            _urlopen_safe(req)
+        elif platform == "custom":
+            body_tpl = cfg.get("body_template", "")
+            if body_tpl and "{{text}}" in body_tpl:
+                escaped = json.dumps(test_text)[1:-1]
+                body = body_tpl.replace("{{text}}", escaped).encode("utf-8")
+                headers = {"Content-Type": "application/json; charset=utf-8"}
+            else:
+                body = test_text.encode("utf-8")
+                headers = {"Content-Type": "text/plain; charset=utf-8"}
+            headers.update(cfg.get("headers", {}))
+            req = _ur.Request(cfg["url"], data=body, headers=headers, method="POST")
+            _urlopen_safe(req)
+        else:
+            return JSONResponse({"ok": False, "error": f"未知平台: {platform}"})
     except Exception as e:
         return JSONResponse({"ok": False, "error": str(e)})
     return {"ok": True}
@@ -592,6 +826,12 @@ def _build_args(body: dict) -> list:
             args.extend(["--summary-rounds", str(int(sr))])
     if body.get("local_asr"):
         args.append("--local-asr")
+    if body.get("no_srt"):
+        args.append("--no-srt")
+    if body.get("no_vtt"):
+        args.append("--no-vtt")
+    if body.get("subtitle_overlay"):
+        args.append("--subtitle-overlay")
     device = body.get("device")
     if device is not None and device != "":
         args.extend(["-d", str(device)])
@@ -624,7 +864,22 @@ async def api_start(request: Request, body: dict = {}):
             "summarize": body.get("summarize", False),
             "summary_model": body.get("summary_model", ""),
             "summary_rounds": body.get("summary_rounds", 1),
+            "gen_srt": not body.get("no_srt", False),
+            "gen_vtt": not body.get("no_vtt", False),
         }
+        # 同步字幕轉發、關鍵字通知、懸浮字幕的啟用狀態（避免不勾但沒按儲存，下次還是啟用）
+        if "fwd_enabled" in body:
+            sf = cfg.get("subtitle_forward", {})
+            sf["enabled"] = body["fwd_enabled"]
+            cfg["subtitle_forward"] = sf
+        if "kw_enabled" in body:
+            ka = cfg.get("keyword_alert", {})
+            ka["enabled"] = body["kw_enabled"]
+            cfg["keyword_alert"] = ka
+        if "subtitle_overlay" in body:
+            so = cfg.get("subtitle_overlay", {})
+            so["enabled"] = body["subtitle_overlay"]
+            cfg["subtitle_overlay"] = so
         CONFIG_FILE.write_text(json.dumps(cfg, ensure_ascii=False, indent=4), encoding="utf-8")
     except Exception:
         pass
@@ -787,6 +1042,14 @@ def main():
     if not args.no_browser:
         threading.Timer(1.0, lambda: webbrowser.open(f"http://localhost:{args.port}")).start()
 
+    # Ctrl+C 強制退出（uvicorn 可能攔截 SIGINT）
+    def _sigint_handler(sig, frame):
+        print("\n  正在停止...")
+        _stop_proc()
+        print("  WebUI 已停止")
+        os._exit(0)
+    signal.signal(signal.SIGINT, _sigint_handler)
+
     try:
         uvicorn.run(app, host="0.0.0.0", port=args.port, log_level="warning")
     except KeyboardInterrupt:
@@ -794,7 +1057,7 @@ def main():
     finally:
         _stop_proc()
         print("\n  WebUI 已停止")
-        os._exit(0)  # 避免 PyTorch atexit cleanup 的 KeyboardInterrupt 錯誤
+        os._exit(0)
 
 
 if __name__ == "__main__":

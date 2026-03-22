@@ -1,6 +1,6 @@
 # jt-live-whisper 安裝與使用 SOP
 
-即時英翻中字幕系統 v2.14.8 (by Jason Cheng)
+即時英翻中字幕系統 v2.15.3 (by Jason Cheng)
 
 | **目錄** | [系統架構](#一系統架構) · [音訊設定](#二事前準備音訊設定) · [安裝程式](#三安裝程式) · [啟動與使用](#四啟動與使用) · [使用流程總結](#五使用流程總結) · [常見問題](#六常見問題) · [檔案說明](#七檔案說明) · [硬體建議](#硬體建議) |
 |---|---|
@@ -39,9 +39,24 @@
     → faster-whisper（離線語音辨識）                        ← 本機或 GPU 伺服器
       → （選配）resemblyzer + spectralcluster（講者辨識）   ← 本機或 GPU 伺服器
         → LLM（Ollama / OpenAI 相容）/ NLLB / Argos（翻譯）
-          → 終端機顯示 + logs/ 記錄檔
-            → （選配）LLM 摘要 → logs/
+          → （自動）LLM 校正逐字稿（有 LLM 時自動啟用）
+            → 終端機顯示 + logs/ 記錄檔
+              → （選配）LLM 摘要 → logs/
 ```
+
+**離線處理產出檔案（存於 `logs/<session>/`）：**
+
+| 檔案 | 說明 | 需要 LLM |
+|------|------|----------|
+| `時間逐字稿_*.txt` | 帶時間戳的逐字稿純文字（翻譯模式含原文+譯文） | 校正需要 |
+| `時間逐字稿_*.html` | 互動式逐字稿（可點擊時間戳播放對應音訊片段） | 校正需要 |
+| `時間逐字稿_*.srt` | SRT 字幕檔（可匯入影片編輯軟體或播放器） | 否 |
+| `時間逐字稿_*.vtt` | WebVTT 字幕檔（網頁播放器 `<track>` 標籤用） | 否 |
+| `摘要_*.txt` | AI 重點摘要 + 校正逐字稿（純文字） | 是 |
+| `摘要_*.html` | AI 摘要（帶樣式 HTML，含相關檔案連結） | 是 |
+| 原始音訊副本 | 原始輸入檔案的副本（方便回溯） | 否 |
+
+> LLM 校正會自動修正 ASR 辨識錯字（同音字、專有名詞等），有設定 LLM 伺服器時自動啟用，無需額外參數。純轉錄模式（不翻譯）同樣支援。
 
 **GPU 伺服器架構（選配）：**
 
@@ -85,6 +100,7 @@ realtime_voice_translate/
   translate_meeting.py     主程式（即時辨識、離線處理、翻譯、摘要，跨平台）
   webui.py                 WebUI 伺服器（FastAPI + WebSocket，瀏覽器介面後端）
   webui.html               WebUI 前端（單一 HTML，內嵌 CSS/JS）
+  subtitle_overlay.py      懸浮字幕覆蓋視窗（PyQt6，選配）
   start.sh                 啟動腳本（macOS）
   start.ps1                啟動腳本（Windows）
   install.sh               安裝腳本（macOS）
@@ -412,6 +428,74 @@ cd C:\jt-live-whisper
 - 即時辨識/翻譯進度顯示
 - 防呆驗證（未選檔案、LLM 未設定、重複啟動等）
 - 淺色/深色主題切換
+- 字幕轉發：即時字幕自動轉發到通訊平台（見下方說明）
+
+### 4-3. 字幕轉發功能
+
+即時辨識的字幕可自動轉發到通訊平台，每隔指定秒數發送一次累積字幕。支援同時多平台。
+
+**支援平台：**
+
+| 平台 | 認證方式 |
+|------|----------|
+| Telegram | Bot Token + Chat ID |
+| Slack | Incoming Webhook URL |
+| Discord | Webhook URL |
+| Teams | Incoming Webhook URL |
+| LINE | Channel Access Token + 接收者 ID |
+| Nextcloud Talk | URL + 對話 Token + 帳號 + App 密碼 |
+| 通用 API | 自訂 URL + Body 範本（`{{text}}` 變數）+ Headers |
+
+**設定方式：** 在 WebUI「字幕轉發」區塊（僅本機顯示）勾選啟用，選擇平台並填入認證資訊，按「儲存設定」後下次啟動生效。可用「測試發送」驗證設定。
+
+**發送內容選項：** 可勾選是否包含時間戳、原文、譯文。
+
+![字幕轉發設定](images/forward-telegram-settings.png)
+
+![Telegram 轉發效果](images/forward-telegram-result.png)
+
+### 4-4. 懸浮字幕功能（感謝 OSSLab 熊大提供建議）
+
+在螢幕上顯示半透明字幕覆蓋視窗，可疊加於任何應用程式上方。需安裝 PyQt6（`install.sh` / `install.ps1` 會自動安裝）。
+
+**功能特色：**
+- 半透明黑底圓角視窗，原文 + 譯文雙行顯示
+- 字體依視窗大小自動縮放，最小不低於下限，容不下則換行
+- 可拖曳定位，位置自動記憶
+- 滑鼠穿透模式（滑鼠事件穿透到下方應用）
+- 系統匣圖示右鍵選單控制
+- 字幕切換淡入淡出動畫
+- 永遠置頂，跨桌面顯示（macOS / Windows）
+
+**設定方式：** 在 WebUI「懸浮字幕」區塊（僅本機顯示）勾選啟用，按「開始」後自動啟動覆蓋視窗。
+
+![懸浮字幕效果](images/subtitle-overlay.png)
+
+![懸浮字幕設定](images/subtitle-overlay-settings.png)
+
+### 4-5. 關鍵字即時通知
+
+即時辨識出現指定關鍵字時自動發出通知，可用於：
+- 長時間會議中追蹤特定議題（公司名、專案名、人名）被提到的時刻
+- 監聽多場會議，只在提到自己負責的項目時注意
+- 開會時一邊做自己的事，設定關鍵字讓系統在提到重點時自動提醒你留意 😎
+- 線上課程摸魚時，讓系統在講師說到「請實作」「請操作」「請記住」「這個會考」等關鍵字時自動提醒 😏
+
+**通知方式：**
+- 全螢幕警示特效（紅金交替閃爍 + 中央大字脈衝動畫，遊戲風格）
+- 瀏覽器桌面推播通知（即使瀏覽器在背景也看得到）
+- 音效提示，可選兩種風格：警示音（核爆風格）或柔和音（三連遞增音）
+- 懸浮字幕視窗邊框金黃色閃爍
+- 訊息列金黃色關鍵字提醒標記
+
+**比對規則：** 不分大小寫，同時比對原文和譯文，同一關鍵字在冷卻時間內不重複通知。
+
+**設定方式：** 在 WebUI「關鍵通知」區塊（僅本機顯示）啟用，輸入關鍵字（每行一個），設定冷卻時間和通知方式。
+
+![關鍵字通知效果](images/keyword-alert.png)
+
+![關鍵字通知設定](images/keyword-alert-settings.png)
+
 - 手機/平板 responsive
 
 **設定頁面**
@@ -1474,6 +1558,7 @@ Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 | `start.sh` | 啟動腳本（macOS） |
 | `start.ps1` | 啟動腳本（Windows） |
 | `translate_meeting.py` | 主程式（跨平台，macOS / Windows 共用） |
+| `subtitle_overlay.py` | 懸浮字幕覆蓋視窗（PyQt6，啟用時由主程式自動啟動） |
 | `remote_whisper_server.py` | GPU 伺服器程式（FastAPI，由 install.sh 自動部署到伺服器） |
 | `whisper.cpp/` | Whisper 語音辨識引擎（macOS 自動編譯，Windows 下載預編譯版本） |
 | `venv/` | Python 虛擬環境（自動建立） |

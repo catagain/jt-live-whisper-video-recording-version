@@ -1,4 +1,4 @@
-# jt-live-whisper v2.14.8
+# jt-live-whisper v2.15.3
 
 **100% 全地端 AI 語音工具集**：即時轉錄、即時翻譯、錄音檔批次處理、講者辨識、會議摘要，所有 AI 模型皆在自有設備上執行，資料不經過任何雲端服務。
 
@@ -152,6 +152,21 @@ Author: Jason Cheng (Jason Tools)
 - **自動偵測 LLM 伺服器**：支援 Ollama、LM Studio、Jan.ai、vLLM、LocalAI、llama.cpp、LiteLLM 等本地端 LLM 伺服器
 - **互動式選單 + CLI 模式**：新手友善的選單介面，進階用戶可用命令列參數直接啟動
 - **WebUI 瀏覽器介面**：`./start.sh --webui` 在瀏覽器中操作所有功能，支援即時字幕、離線處理、講者辨識、摘要，手機/平板也可使用
+- **字幕轉發**：即時字幕自動轉發到 Telegram / Slack / Discord / Teams / LINE / Nextcloud Talk / 通用 API，可同時多平台
+- **懸浮字幕**（感謝 OSSLab 熊大提供建議）：桌面半透明字幕覆蓋視窗（PyQt6），可疊加於任何應用程式上方，字體自動縮放、可拖曳定位
+- **關鍵字即時通知**：設定關鍵字，出現時全螢幕警示特效 + 瀏覽器推播 + 音效（警示/柔和可選）+ 懸浮字幕閃爍。可用於追蹤會議重點、開會時提醒你留意關鍵議題，或線上課程摸魚時讓系統在「請實作」「這個會考」時自動提醒
+
+![關鍵字通知效果](images/keyword-alert.png)
+
+![關鍵字通知設定](images/keyword-alert-settings.png)
+
+![懸浮字幕效果](images/subtitle-overlay.png)
+
+![懸浮字幕設定](images/subtitle-overlay-settings.png)
+
+![字幕轉發設定](images/forward-telegram-settings.png)
+
+![Telegram 轉發效果](images/forward-telegram-result.png)
 
 &nbsp;
 
@@ -423,6 +438,19 @@ cd C:\jt-live-whisper
 # 指定講者人數 + 摘要
 ./start.sh --input meeting.mp3 --diarize --num-speakers 3 --summarize
 ```
+
+**產出檔案**（存於 `logs/<session>/`）：
+
+| 檔案 | 說明 | 需要 LLM |
+|------|------|----------|
+| `時間逐字稿_*.txt` | 帶時間戳逐字稿（翻譯模式含原文+譯文） | 校正需要 |
+| `時間逐字稿_*.html` | 互動式逐字稿（點擊時間戳可播放音訊） | 校正需要 |
+| `時間逐字稿_*.srt` | SRT 字幕檔 | 否 |
+| `時間逐字稿_*.vtt` | WebVTT 字幕檔 | 否 |
+| `摘要_*.txt` | AI 重點摘要 + 校正逐字稿 | 是 |
+| `摘要_*.html` | AI 摘要 HTML（含樣式與相關檔案連結） | 是 |
+
+> 有設定 LLM 伺服器時，逐字稿會自動經過 LLM 校正（修正 ASR 辨識錯字），純轉錄模式同樣支援。
 
 ### 批次摘要
 
