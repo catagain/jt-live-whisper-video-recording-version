@@ -301,7 +301,7 @@ $banner_line = '=' * $cols
 
 Write-Host ""
 Write-Host "${C_TITLE}${banner_line}${NC}"
-Write-Host "${C_TITLE}${BOLD}  jt-live-whisper v2.15.4 - 100% 全地端 AI 語音工具集 - Windows 安裝程式${NC}"
+Write-Host "${C_TITLE}${BOLD}  jt-live-whisper v2.15.5 - 100% 全地端 AI 語音工具集 - Windows 安裝程式${NC}"
 Write-Host "${C_TITLE}  by Jason Cheng (Jason Tools)${NC}"
 Write-Host "${C_TITLE}${banner_line}${NC}"
 Write-Host ""
@@ -1373,64 +1373,71 @@ if ($true) {
 }
 
 # ═══════════════════════════════════════════════════════════════
-# 5b. faster-whisper 模型預下載
+# 5b. faster-whisper 模型預下載（全部下載）
 # ═══════════════════════════════════════════════════════════════
 
-section "faster-whisper 模型預下載（large-v3-turbo）"
+section "faster-whisper 模型預下載"
 
-$fwModelFound = & $VENV_PYTHON -c @"
+& $VENV_PYTHON -m pip install --disable-pip-version-check -q huggingface_hub 2>$null | Out-Null
+
+$fwModelsToDownload = @(
+    @{ Name = "base.en";         Size = "約 150MB" },
+    @{ Name = "base";            Size = "約 150MB" },
+    @{ Name = "small.en";        Size = "約 500MB" },
+    @{ Name = "small";           Size = "約 500MB" },
+    @{ Name = "large-v3-turbo";  Size = "約 1.6GB" }
+)
+
+foreach ($fwM in $fwModelsToDownload) {
+    $fwName = $fwM.Name
+    # 檢查是否已存在
+    $fwFound = & $VENV_PYTHON -c "
 import os
-found = False
-dirs = []
-try:
-    from huggingface_hub.constants import HF_HUB_CACHE
-    dirs.append(HF_HUB_CACHE)
-except: pass
-default = os.path.join(os.path.expanduser('~'), '.cache', 'huggingface', 'hub')
-if default not in dirs:
-    dirs.append(default)
-for d in dirs:
-    for prefix in ['Systran', 'mobiuslabsgmbh']:
-        if os.path.isdir(os.path.join(d, 'models--' + prefix + '--faster-whisper-large-v3-turbo')):
-            found = True
-            break
-    if found:
-        break
-print('found' if found else 'notfound')
-"@ 2>$null
-
-if ($fwModelFound -eq "found") {
-    check_ok "faster-whisper 模型 large-v3-turbo 已存在"
-} else {
-    info "下載 faster-whisper large-v3-turbo 模型（約 1.6GB）..."
-    & $VENV_PYTHON -m pip install --disable-pip-version-check -q huggingface_hub 2>$null | Out-Null
-    # mobiuslabsgmbh 是 faster-whisper 內部預設的 repo（Systran 已需認證）
-    $null = hf_download "mobiuslabsgmbh/faster-whisper-large-v3-turbo" "faster-whisper 模型" ""
-
-    # 驗證下載
-    $fwVerify = & $VENV_PYTHON -c @"
+for d in [os.path.join(os.path.expanduser('~'), '.cache', 'huggingface', 'hub')]:
+    for prefix in ['Systran', 'mobiuslabsgmbh', 'deepdml']:
+        if os.path.isdir(os.path.join(d, 'models--' + prefix + '--faster-whisper-$fwName')): print('found'); exit()
+print('notfound')
+" 2>$null
+    if ($fwFound -eq "found") {
+        check_ok "faster-whisper $fwName 已存在"
+        continue
+    }
+    info "下載 faster-whisper $fwName（$($fwM.Size)）..."
+    # 嘗試多個 repo
+    $fwRepos = @("mobiuslabsgmbh/faster-whisper-$fwName", "Systran/faster-whisper-$fwName", "deepdml/faster-whisper-$fwName")
+    $fwDlOk = $false
+    $fwAttempt = 0
+    foreach ($fwRepo in $fwRepos) {
+        $fwAttempt++
+        & $VENV_PYTHON -c @"
 import os
-found = False
-dirs = []
+os.environ['HF_HUB_DISABLE_TELEMETRY'] = '1'
+from huggingface_hub import snapshot_download
 try:
-    from huggingface_hub.constants import HF_HUB_CACHE
-    dirs.append(HF_HUB_CACHE)
-except: pass
-default = os.path.join(os.path.expanduser('~'), '.cache', 'huggingface', 'hub')
-if default not in dirs:
-    dirs.append(default)
-for d in dirs:
-    for prefix in ['Systran', 'mobiuslabsgmbh']:
-        if os.path.isdir(os.path.join(d, 'models--' + prefix + '--faster-whisper-large-v3-turbo')):
-            found = True
-            break
-    if found:
-        break
-print('found' if found else 'notfound')
-"@ 2>$null
-
-    if ($fwVerify -eq "found") {
-        check_ok "faster-whisper 模型 large-v3-turbo 安裝完成"
+    snapshot_download('$fwRepo')
+except:
+    try:
+        import ssl; ssl._create_default_https_context = ssl._create_unverified_context
+        os.environ['CURL_CA_BUNDLE'] = ''
+        os.environ['REQUESTS_CA_BUNDLE'] = ''
+        snapshot_download('$fwRepo')
+    except:
+        pass
+"@ 2>$null | Out-Null
+        $fwDlCheck = & $VENV_PYTHON -c "
+import os
+for d in [os.path.join(os.path.expanduser('~'), '.cache', 'huggingface', 'hub')]:
+    for prefix in ['Systran', 'mobiuslabsgmbh', 'deepdml']:
+        if os.path.isdir(os.path.join(d, 'models--' + prefix + '--faster-whisper-$fwName')): print('found'); exit()
+print('notfound')
+" 2>$null
+        if ($fwDlCheck -eq "found") { $fwDlOk = $true; break }
+        info "  ($fwAttempt/$($fwRepos.Count)) 嘗試更換其他來源..."
+    }
+    if ($fwDlOk) {
+        check_ok "faster-whisper $fwName 安裝完成"
+    } else {
+        check_notice "faster-whisper $fwName 下載失敗，可稍後重新執行安裝"
     }
 }
 

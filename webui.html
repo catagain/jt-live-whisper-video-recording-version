@@ -463,7 +463,7 @@ function _updateModelRec(mode){
   const noEng=['zh','zh2en','zh2ja','ja2zh','ja','en_zh','ja_zh'];
   const isNoEng=noEng.includes(mode);
   // 模型大小排序（用於判斷效能需求）
-  const _mOrder={'base.en':0,'base':1,'small.en':2,'small':3,'medium.en':4,'medium':5,'large-v3-turbo':6,'large-v3':7};
+  const _mOrder={'base.en':0,'base':1,'small.en':2,'small':3,'large-v3-turbo':4,'large-v3':5};
   const recIdx=_mOrder[recM]??6;
   cselSetItems($('iModel'),_cfgModels.map(m=>{
     const isEnOnly=m.value.endsWith('.en');

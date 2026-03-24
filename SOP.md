@@ -1,6 +1,6 @@
 # jt-live-whisper 安裝與使用 SOP
 
-即時英翻中字幕系統 v2.15.4 (by Jason Cheng)
+即時英翻中字幕系統 v2.15.5 (by Jason Cheng)
 
 | **目錄** | [系統架構](#一系統架構) · [音訊設定](#二事前準備音訊設定) · [安裝程式](#三安裝程式) · [啟動與使用](#四啟動與使用) · [使用流程總結](#五使用流程總結) · [常見問題](#六常見問題) · [檔案說明](#七檔案說明) · [硬體建議](#硬體建議) |
 |---|---|
@@ -531,7 +531,7 @@ WebUI 需要 fastapi、uvicorn、websockets 套件（安裝腳本已自動安裝
 | `--webui` | 啟動 WebUI 瀏覽器介面（在瀏覽器中操作所有功能） | |
 | `--mode MODE` | 功能模式 (`en2zh` / `zh2en` / `ja2zh` / `zh2ja` / `en_zh` / `ja_zh` / `en` / `zh` / `ja` / `record`) | `en2zh` |
 | `--asr ASR` | 語音辨識引擎 (`whisper` / `moonshine` / `faster-whisper`) | `whisper` |
-| `-m`, `--model MODEL` | Whisper 模型 (large-v3-turbo / large-v3 / small / medium / small.en / base.en / medium.en) | `en2zh`: large-v3-turbo / 中日文+有GPU: large-v3-turbo / 中日文+無GPU: small |
+| `-m`, `--model MODEL` | Whisper 模型 (large-v3-turbo / large-v3 / small / small.en / base / base.en) | `en2zh`: large-v3-turbo / 中日文+有GPU: large-v3-turbo / 中日文+無GPU: small |
 | `--moonshine-model MODEL` | Moonshine 模型 (medium / small / tiny) | medium |
 | `-s`, `--scene SCENE` | 使用場景 (`meeting` / `training` / `presentation` / `subtitle`)，僅 Whisper 即時模式 | `training` |
 | `--topic TOPIC` | 會議主題（提升翻譯品質，例：`--topic 'ZFS 儲存管理'`）。僅翻譯模式有效 | |
@@ -804,14 +804,13 @@ CLI 用法：
 | 選項 | 說明 |
 |---|---|
 | base.en | 最快，準確度一般 |
+| base | 最快，中日文可用 |
 | small.en | 快，準確度好 |
-| small | 快，多語言（中日文可用） |
+| small | 快，中日文可用 |
 | **large-v3-turbo**（英翻中預設） | 快，準確度很好 |
-| medium.en | 較慢，準確度很好 |
-| medium | 較慢，多語言（中日文品質較好） |
 | **large-v3** | 最慢，中日文品質最好，有獨立 GPU 可選用 |
 
-> 英翻中模式預設使用 large-v3-turbo。中日文模式隱藏 .en 模型，顯示 small / large-v3-turbo / medium / large-v3 四個多語言模型；有 GPU 時預設 large-v3-turbo，無 GPU 時預設 small。Windows faster-whisper 模式下所有模型均可選擇，首次使用時自動從 HuggingFace 下載。
+> 英翻中模式預設使用 large-v3-turbo。中日文模式隱藏 .en 模型，顯示 base / small / large-v3-turbo / large-v3 四個多語言模型；有 GPU 時預設 large-v3-turbo，無 GPU 時預設 small。Windows faster-whisper 模式下所有模型均可選擇，首次使用時自動從 HuggingFace 下載。
 
 **4) 使用場景**
 

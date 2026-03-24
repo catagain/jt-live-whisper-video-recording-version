@@ -162,7 +162,7 @@ except Exception as e:
     local err_msg
     err_msg=$(echo "$result" | sed -n 's/^FAIL://p')
     check_notice "${desc}下載失敗，可稍後在有網路時重新執行安裝"
-    [ -n "$err_msg" ] && echo "  ${C_DIM}錯誤詳情: $err_msg${NC}"
+    [ -n "$err_msg" ] && echo -e "  ${C_DIM}錯誤詳情: $err_msg${NC}"
     return 1
 }
 
@@ -196,7 +196,7 @@ spinner_stop() {
 print_title() {
     echo ""
     echo -e "${C_TITLE}============================================================${NC}"
-    echo -e "${C_TITLE}${BOLD}  jt-live-whisper v2.15.4 - 100% 全地端 AI 語音工具集 - 安裝程式${NC}"
+    echo -e "${C_TITLE}${BOLD}  jt-live-whisper v2.15.5 - 100% 全地端 AI 語音工具集 - 安裝程式${NC}"
     echo -e "${C_TITLE}  by Jason Cheng (Jason Tools)${NC}"
     echo -e "${C_TITLE}============================================================${NC}"
     echo ""
@@ -1032,92 +1032,80 @@ check_nllb_model() {
     fi
 }
 
-# ─── faster-whisper 模型預下載 ──────────────────────────────
+# ─── faster-whisper 模型預下載（全部下載）──────────────────────────────
 check_faster_whisper_model() {
-    # Apple Silicon → large-v3-turbo（Metal 加速）、Intel → small（CPU 夠用）
-    local fw_model
-    if [ "$(uname -m)" = "arm64" ]; then
-        fw_model="large-v3-turbo"
-    else
-        fw_model="small"
-    fi
-
-    # bash 3.2 (macOS) bug: 全形括號（）內嵌變數會截斷，需拼接繞過
-    _fw_section="faster-whisper 模型預下載"
-    _fw_section="${_fw_section}（${fw_model}）"
-    section "$_fw_section"
+    section "faster-whisper 模型預下載"
 
     source "$VENV_DIR/bin/activate"
-
-    # 確保 huggingface_hub 已安裝
     pip install --disable-pip-version-check -q huggingface_hub 2>/dev/null
 
-    local fw_found
-    fw_found=$(python3 -c "
+    local _fw_models="base.en:約150MB base:約150MB small.en:約500MB small:約500MB large-v3-turbo:約1.6GB"
+
+    for _fw_entry in $_fw_models; do
+        local _fw_name="${_fw_entry%%:*}"
+        local _fw_size="${_fw_entry##*:}"
+
+        # 檢查是否已存在
+        local _fw_found
+        _fw_found=$(python3 -c "
 import os
-found = False
-dirs = []
-try:
-    from huggingface_hub.constants import HF_HUB_CACHE
-    dirs.append(HF_HUB_CACHE)
-except: pass
-default = os.path.join(os.path.expanduser('~'), '.cache', 'huggingface', 'hub')
-if default not in dirs:
-    dirs.append(default)
-for d in dirs:
-    for prefix in ['Systran', 'mobiuslabsgmbh']:
-        if os.path.isdir(os.path.join(d, 'models--' + prefix + '--faster-whisper-$fw_model')):
-            found = True
-            break
-    if found:
-        break
-print('found' if found else 'notfound')
+for d in [os.path.join(os.path.expanduser('~'), '.cache', 'huggingface', 'hub')]:
+    for prefix in ['Systran', 'mobiuslabsgmbh', 'deepdml']:
+        if os.path.isdir(os.path.join(d, 'models--' + prefix + '--faster-whisper-$_fw_name')):
+            print('found'); exit()
+print('notfound')
 " 2>/dev/null)
 
-    if [ "$fw_found" = "found" ]; then
-        check_ok "faster-whisper 模型 $fw_model 已存在"
-    else
-        local fw_size
-        if [ "$fw_model" = "large-v3-turbo" ]; then
-            fw_size="約 1.6GB"
-        else
-            fw_size="約 500MB"
+        if [ "$_fw_found" = "found" ]; then
+            check_ok "faster-whisper $_fw_name 已存在"
+            continue
         fi
-        check_install "正在下載 faster-whisper $fw_model 模型（$fw_size）..."
-        echo ""
-        # mobiuslabsgmbh 是 faster-whisper 內部預設的 repo（Systran 已需認證）
-        hf_download "mobiuslabsgmbh/faster-whisper-$fw_model" "faster-whisper 模型" ""
-        echo ""
 
-        # 驗證下載
-        fw_found=$(python3 -c "
+        local _fw_dl_msg="下載 faster-whisper $_fw_name"
+        _fw_dl_msg="${_fw_dl_msg}（${_fw_size}）..."
+        echo -e "  ${C_DIM}$_fw_dl_msg${NC}"
+
+        # 嘗試多個 repo（靜默切換）
+        local _dl_ok=0 _fw_attempt=0 _fw_total=3
+        for _fw_repo in "mobiuslabsgmbh/faster-whisper-$_fw_name" "Systran/faster-whisper-$_fw_name" "deepdml/faster-whisper-$_fw_name"; do
+            ((_fw_attempt++)) || true
+            python3 -c "
 import os
-found = False
-dirs = []
+os.environ['HF_HUB_DISABLE_TELEMETRY'] = '1'
+from huggingface_hub import snapshot_download
 try:
-    from huggingface_hub.constants import HF_HUB_CACHE
-    dirs.append(HF_HUB_CACHE)
-except: pass
-default = os.path.join(os.path.expanduser('~'), '.cache', 'huggingface', 'hub')
-if default not in dirs:
-    dirs.append(default)
-for d in dirs:
-    for prefix in ['Systran', 'mobiuslabsgmbh']:
-        if os.path.isdir(os.path.join(d, 'models--' + prefix + '--faster-whisper-$fw_model')):
-            found = True
-            break
-    if found:
-        break
-print('found' if found else 'notfound')
+    snapshot_download('$_fw_repo')
+except:
+    try:
+        import ssl; ssl._create_default_https_context = ssl._create_unverified_context
+        os.environ['CURL_CA_BUNDLE'] = ''
+        os.environ['REQUESTS_CA_BUNDLE'] = ''
+        snapshot_download('$_fw_repo')
+    except:
+        pass
+" 2>/dev/null
+            local _fw_check
+            _fw_check=$(python3 -c "
+import os
+for d in [os.path.join(os.path.expanduser('~'), '.cache', 'huggingface', 'hub')]:
+    for prefix in ['Systran', 'mobiuslabsgmbh', 'deepdml']:
+        if os.path.isdir(os.path.join(d, 'models--' + prefix + '--faster-whisper-$_fw_name')):
+            print('found'); exit()
+print('notfound')
 " 2>/dev/null)
+            if [ "$_fw_check" = "found" ]; then
+                _dl_ok=1
+                break
+            fi
+            echo -e "  ${C_DIM}  ($_fw_attempt/$_fw_total) 嘗試更換其他來源...${NC}"
+        done
 
-        if [ "$fw_found" = "found" ]; then
-            check_ok "faster-whisper 模型 $fw_model 安裝完成"
+        if [ $_dl_ok -eq 1 ]; then
+            check_ok "faster-whisper $_fw_name 安裝完成"
         else
-            check_fail "faster-whisper 模型下載失敗"
-            echo -e "  ${C_DIM}  請確認網路連線後重新執行安裝${NC}"
+            check_notice "faster-whisper $_fw_name 下載失敗，可稍後重新執行安裝"
         fi
-    fi
+    done
 
     deactivate
 }

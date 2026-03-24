@@ -1,5 +1,16 @@
 # Changelog
 
+### v2.15.5 (2026-03-25)
+
+**改進**
+- install.sh / install.ps1 faster-whisper 模型改為全部預下載（base.en、base、small.en、small、large-v3-turbo），不再依硬體選擇性下載
+- install.ps1 faster-whisper 模型下載依有無 GPU 自動選擇預設模型（有 GPU → large-v3-turbo，無 GPU → small），section 標題動態顯示
+- 移除 medium.en / medium 模型選項（WHISPER_MODELS、WebUI 下拉選單、SOP 說明），新增 base 多語言模型
+- WebUI 模型排序更新（移除 medium 層級）
+
+**修正**
+- install.sh / install.ps1 faster-whisper 模型下載 401 失敗時自動嘗試其他 repo（mobiuslabsgmbh → Systran → deepdml），靜默切換不顯示錯誤，全部失敗才提示
+
 ### v2.15.4 (2026-03-24)
 
 **修正**

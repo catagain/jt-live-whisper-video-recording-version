@@ -623,11 +623,10 @@ _MIC_LANG = {"en2zh": "zh", "zh2en": "en", "ja2zh": "zh", "zh2ja": "ja",
 # 可用的 whisper 模型（由小到大）
 WHISPER_MODELS = [
     ("base.en", "ggml-base.en.bin", "最快，準確度一般"),
+    ("base", "ggml-base.bin", "最快，中日文可用"),
     ("small.en", "ggml-small.en.bin", "快，準確度好"),
     ("small", "ggml-small.bin", "快，中日文可用"),
     ("large-v3-turbo", "ggml-large-v3-turbo.bin", "快，準確度很好"),
-    ("medium.en", "ggml-medium.en.bin", "較慢，準確度很好"),
-    ("medium", "ggml-medium.bin", "較慢，中日文品質較好"),
     ("large-v3", "ggml-large-v3.bin", "最慢，中日文品質最好，有獨立 GPU 可選用"),
 ]
 
@@ -723,7 +722,7 @@ ASR_ENGINES = [
     ("moonshine", "Moonshine", "真串流，低延遲，僅英文"),
 ]
 
-APP_VERSION = "2.15.4"
+APP_VERSION = "2.15.5"
 
 # ─── WebUI 暫停控制（SIGUSR1 toggle）──────────────────────────────
 _webui_pause_event = None  # 由各 streaming 函式設定
