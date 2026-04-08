@@ -20,6 +20,7 @@ import threading
 import time
 import wave
 from collections import deque
+from functools import lru_cache
 
 IS_WINDOWS = sys.platform == "win32"
 IS_MACOS = sys.platform == "darwin"
@@ -632,12 +633,14 @@ WHISPER_MODELS = [
 
 # ── CPU 效能評估（自動選擇適合的 Whisper 模型）──
 
+@lru_cache(maxsize=1)
 def _is_apple_silicon():
     """偵測是否為 Apple Silicon (ARM64) Mac"""
     import platform
     return IS_MACOS and platform.machine() == "arm64"
 
 
+@lru_cache(maxsize=1)
 def _has_local_gpu():
     """本機是否有 GPU 加速（Apple Silicon Metal 或 NVIDIA CUDA）"""
     if _is_apple_silicon():
@@ -648,17 +651,65 @@ def _has_local_gpu():
     return False
 
 
+@lru_cache(maxsize=1)
+def _get_system_memory_gb():
+    """取得系統實體記憶體大小（GB）"""
+    try:
+        if IS_MACOS:
+            result = subprocess.run(["sysctl", "-n", "hw.memsize"],
+                                    capture_output=True, text=True, timeout=5)
+            return int(result.stdout.strip()) / (1024 ** 3)
+        elif IS_WINDOWS:
+            import ctypes
+            kernel32 = ctypes.windll.kernel32
+            c_ulong = ctypes.c_ulonglong
+            mem = c_ulong()
+            kernel32.GetPhysicallyInstalledSystemMemory(ctypes.byref(mem))
+            return mem.value / (1024 * 1024)  # KB → GB
+        else:
+            with open("/proc/meminfo") as f:
+                for line in f:
+                    if line.startswith("MemTotal"):
+                        return int(line.split()[1]) / (1024 * 1024)  # KB → GB
+    except Exception:
+        pass
+    return 0
+
+
+def _recommended_mic_engine(mode="zh", remote_whisper_cfg=None):
+    """推薦麥克風轉錄的 ASR 引擎與模型。
+    優先順序：GPU 伺服器 > mlx GPU > 本機 CPU。
+    回傳 (engine, model)：engine = 'remote' | 'mlx' | 'cpu', model = 模型名。"""
+    _need_multilang = mode in _NOENG_MODELS
+    # 1. 有 GPU 伺服器 → 優先遠端（macOS / Windows 都適用）
+    if remote_whisper_cfg:
+        return "remote", "large-v3-turbo"
+    # 2. Apple Silicon + mlx-whisper → GPU 加速（依記憶體選模型）
+    if _is_apple_silicon() and _has_mlx_whisper():
+        mem_gb = _get_system_memory_gb()
+        if mem_gb >= 24:
+            return "mlx", "large-v3-turbo"
+        elif mem_gb >= 16:
+            return "mlx", "small" if _need_multilang else "small.en"
+        else:
+            return "cpu", "small" if _need_multilang else "base.en"
+    # 3. 本機 CPU
+    return "cpu", "small" if _need_multilang else "base.en"
+
+
+@lru_cache(maxsize=1)
 def _has_mlx_whisper():
     """Apple Silicon 且已安裝 mlx-whisper"""
     if not _is_apple_silicon():
         return False
     try:
-        import mlx_whisper  # noqa: F401
-        return True
-    except ImportError:
+        import importlib.util
+        return importlib.util.find_spec("mlx_whisper") is not None
+    except Exception:
         return False
 
 
+@lru_cache(maxsize=16)
 def _recommended_whisper_model(mode="en2zh"):
     """根據 CPU 架構與核心數推薦此裝置最適合的即時 Whisper 模型。
     Apple Silicon 有 Metal GPU 加速，同核心數效能遠高於 Intel CPU。"""
@@ -722,7 +773,7 @@ ASR_ENGINES = [
     ("moonshine", "Moonshine", "真串流，低延遲，僅英文"),
 ]
 
-APP_VERSION = "2.15.5"
+APP_VERSION = "2.16.1"
 
 # ─── WebUI 暫停控制（SIGUSR1 toggle）──────────────────────────────
 _webui_pause_event = None  # 由各 streaming 函式設定
@@ -745,6 +796,20 @@ if not IS_WINDOWS and hasattr(signal, "SIGUSR1"):
 # 不啟用時 _webui_send() 是 no-op，零效能影響
 _webui_queue = None  # queue.Queue，啟用時才建立
 _WEBUI_PORT = 19780
+
+
+def _webui_send_realtime_results(log_path=None, rec_paths=None):
+    """即時模式停止時，送出結果檔案清單給 WebUI"""
+    files = []
+    if log_path and os.path.isfile(log_path):
+        rel = os.path.relpath(log_path, os.path.dirname(os.path.abspath(__file__)))
+        files.append({"name": os.path.basename(log_path), "path": rel})
+    for rp in (rec_paths or []):
+        if rp and os.path.isfile(rp):
+            rel = os.path.relpath(rp, os.path.dirname(os.path.abspath(__file__)))
+            files.append({"name": os.path.basename(rp), "path": rel})
+    if files:
+        _webui_send({"type": "output_files", "files": files, "dirs": []})
 
 
 _subtitle_forwarder = None  # SubtitleForwarder 實例（啟用時才建立）
@@ -4100,6 +4165,7 @@ def run_stream(capture_id: int, translator, model_name: str, model_path: str,
             rec_path = recorder.close()
             print(f"\n  {C_OK}✓ 錄音已儲存: {rec_path}{RESET}", flush=True)
             print(f"  {C_DIM}提示: 可再次執行本程式，選擇「讀入檔案」匯入錄音檔，產生逐字稿校正與 AI 摘要{RESET}", flush=True)
+            _webui_send_realtime_results(log_path, [rec_path])
         print(f"\n{C_DIM}正在停止...{RESET}", flush=True)
         _webui_send({"type": "progress", "stage": "正在停止", "detail": ""})
         proc.terminate()
@@ -4434,6 +4500,7 @@ def run_stream(capture_id: int, translator, model_name: str, model_path: str,
     if recorder:
         rec_path = recorder.close()
         print(f"\n  {C_OK}✓ 錄音已儲存: {rec_path}{RESET}", flush=True)
+        _webui_send_realtime_results(log_path, [rec_path])
 
     # 清理暫存檔
     if os.path.exists(output_file):
@@ -4808,6 +4875,7 @@ def run_stream_moonshine(capture_id: int, translator, moonshine_model_name: str,
             rec_path = recorder.close()
             print(f"\n  {C_OK}✓ 錄音已儲存: {rec_path}{RESET}", flush=True)
             print(f"  {C_DIM}提示: 可再次執行本程式，選擇「讀入檔案」匯入錄音檔，產生逐字稿校正與 AI 摘要{RESET}", flush=True)
+            _webui_send_realtime_results(log_path, [rec_path])
 
     # Signal handler
     _sigint_count_ms = [0]
@@ -5314,6 +5382,7 @@ def run_stream_remote(capture_id: int, translator, model_name: str,
             rec_path = recorder.close()
             print(f"\n  {C_OK}✓ 錄音已儲存: {rec_path}{RESET}", flush=True)
             print(f"  {C_DIM}提示: 可再次執行本程式，選擇「讀入檔案」匯入錄音檔，產生逐字稿校正與 AI 摘要{RESET}", flush=True)
+            _webui_send_realtime_results(log_path, [rec_path])
         # 伺服器保持執行（不停止，允許多實例共用）
         _ssh_close_cm(remote_cfg)
 
@@ -5906,6 +5975,7 @@ def run_stream_local_whisper(capture_id: int, translator, model_name: str,
             rec_path = recorder.close()
             print(f"\n  {C_OK}錄音已儲存: {rec_path}{RESET}", flush=True)
             print(f"  {C_DIM}提示: 可再次執行本程式，選擇「讀入檔案」匯入錄音檔，產生逐字稿校正與 AI 摘要{RESET}", flush=True)
+            _webui_send_realtime_results(log_path, [rec_path])
 
     _sigint_count_lc = [0]
 
@@ -6028,7 +6098,8 @@ def run_stream_bidirectional(lb_device_id, mic_device_id,
                               meeting_topic: str = None,
                               use_mlx: bool = False,
                               mic_translate: bool = True,
-                              denoise: bool = False):
+                              denoise: bool = False,
+                              mic_remote_cfg: dict = None):
     """雙向即時翻譯：兩路音訊串流 → 共用 faster-whisper/mlx-whisper → 各自翻譯 → 交錯輸出。
     lb_device_id: 系統音訊（BlackHole / WASAPI Loopback）
     mic_device_id: 麥克風
@@ -6436,10 +6507,11 @@ def run_stream_bidirectional(lb_device_id, mic_device_id,
             blocksize=int(lb_sr * 0.1), dtype="float32",
             callback=lb_audio_callback)
 
-    mic_stream = sd.InputStream(
-        device=mic_device_id, samplerate=mic_sr, channels=mic_ch,
-        blocksize=int(mic_sr * 0.1), dtype="float32",
-        callback=mic_audio_callback)
+    # 注意：mic_stream 故意延後到 lb_stream.start() 之後才建立。
+    # macOS CoreAudio 若同時預先建立兩個 InputStream（BlackHole + 內建麥克風），
+    # 第二個 stream.start() 會偶發 PaErrorCode -9986 (paInternalError)。
+    # 改為「先 start lb，再建立並 start mic」可穩定避開。
+    mic_stream = None
 
     # ── 降噪 ──
     if denoise:
@@ -6854,7 +6926,7 @@ def run_stream_bidirectional(lb_device_id, mic_device_id,
 
     _slow_warned = [False]
 
-    def transcribe_chunk(seq, wav_path, lang, pending_res, res_lock):
+    def transcribe_chunk(seq, wav_path, lang, pending_res, res_lock, use_remote=False):
         with _active_lock:
             _active_transcriptions[0] += 1
         try:
@@ -6862,6 +6934,24 @@ def run_stream_bidirectional(lb_device_id, mic_device_id,
                 with res_lock:
                     pending_res[seq] = _TRANSCRIBE_FAILED
                 return
+
+            # 遠端 GPU 伺服器辨識（麥克風）
+            if use_remote and mic_remote_cfg:
+                try:
+                    _rl = lang or ("zh" if mode in ("zh", "zh2en", "zh2ja", "en_zh", "ja_zh") else "en")
+                    with open(wav_path, "rb") as _rf:
+                        _wav_bytes = _rf.read()
+                    _segs, _full, _pt = _remote_whisper_transcribe_bytes(
+                        mic_remote_cfg, _wav_bytes, model_name, _rl, timeout=30)
+                    with res_lock:
+                        pending_res[seq] = (_segs, _full, _pt, _rl)
+                    return
+                except Exception as _re:
+                    # 遠端失敗 → 降級本機辨識
+                    with print_lock:
+                        print(f"{C_DIM}  [麥克風遠端辨識失敗，降級本機: {_re}]{RESET}", flush=True)
+
+            # 本機辨識（mlx / faster-whisper）
             # 序列化鎖：Metal GPU 不允許並行 command buffer（會 crash）
             # 超時 = step_sec：等太久不如放棄，下一個 chunk 有更新的音訊
             if not _serial_lock.acquire(timeout=step_sec):
@@ -7026,6 +7116,7 @@ def run_stream_bidirectional(lb_device_id, mic_device_id,
             print(f"  {C_OK}錄音已儲存: {p2}{RESET}", flush=True)
         if recorder_lb or recorder_mic:
             print(f"  {C_DIM}提示: 可再次執行本程式，選擇「讀入檔案」匯入錄音檔，產生逐字稿校正與 AI 摘要{RESET}", flush=True)
+            _webui_send_realtime_results(log_path, [p1 if recorder_lb else None, p2 if recorder_mic else None])
         return _still_active
 
     _sigint_count = [0]
@@ -7047,8 +7138,44 @@ def run_stream_bidirectional(lb_device_id, mic_device_id,
     signal.signal(signal.SIGTERM, signal_handler)
 
     # ── 啟動音訊串流 ──
+    # 先啟動 lb_stream，再「建立並啟動」mic_stream（macOS 必要的順序，見上方說明）
     lb_stream.start()
-    mic_stream.start()
+
+    def _open_mic_stream(**extra):
+        return sd.InputStream(
+            device=mic_device_id, samplerate=mic_sr, channels=mic_ch,
+            dtype="float32", callback=mic_audio_callback, **extra)
+
+    _mic_attempts = [
+        ("blocksize=int(mic_sr*0.1)", dict(blocksize=int(mic_sr * 0.1))),
+        ("blocksize=0, latency=high", dict(blocksize=0, latency='high')),
+        ("blocksize=int(mic_sr*0.1), latency=high", dict(blocksize=int(mic_sr * 0.1), latency='high')),
+    ]
+    _mic_started = False
+    _last_err = None
+    for _label, _kw in _mic_attempts:
+        try:
+            mic_stream = _open_mic_stream(**_kw)
+            mic_stream.start()
+            _mic_started = True
+            break
+        except Exception as _e:
+            _last_err = _e
+            try:
+                if mic_stream is not None:
+                    mic_stream.close()
+            except Exception:
+                pass
+            mic_stream = None
+            print(f"  {C_DIM}麥克風串流嘗試（{_label}）失敗：{_e}{RESET}", flush=True)
+    if not _mic_started:
+        try:
+            lb_stream.stop(); lb_stream.close()
+        except Exception:
+            pass
+        print(f"  {C_HIGHLIGHT}[錯誤] 麥克風串流所有重試方案均失敗：{_last_err}{RESET}", flush=True)
+        print(f"  {C_DIM}建議：1) 確認麥克風未被其他程式佔用 2) 系統設定→隱私權與安全性→麥克風 確認 Terminal/Python 已授權 3) 重啟 CoreAudio：sudo killall coreaudiod{RESET}", flush=True)
+        raise _last_err
 
     # ── 驗證音訊 ──
     _audio_ok = [False, False]  # [lb, mic]
@@ -7119,9 +7246,10 @@ def run_stream_bidirectional(lb_device_id, mic_device_id,
                         _last_lb_rms = rms
                         if rms >= 0.001:
                             seq = lb_transcribe_seq[0]; lb_transcribe_seq[0] += 1
+                            _lb_use_remote = bool(mic_remote_cfg)
                             threading.Thread(
                                 target=transcribe_chunk,
-                                args=(seq, wav_path, lb_lang, lb_pending_results, lb_results_lock),
+                                args=(seq, wav_path, lb_lang, lb_pending_results, lb_results_lock, _lb_use_remote),
                                 daemon=True,
                             ).start()
                         else:
@@ -7151,9 +7279,10 @@ def run_stream_bidirectional(lb_device_id, mic_device_id,
                             _mic_rms_threshold = max(_mic_rms_threshold, 0.015)
                         if rms >= _mic_rms_threshold:
                             seq = mic_transcribe_seq[0]; mic_transcribe_seq[0] += 1
+                            _mic_use_remote = bool(mic_remote_cfg)
                             threading.Thread(
                                 target=transcribe_chunk,
-                                args=(seq, wav_path, mic_lang, mic_pending_results, mic_results_lock),
+                                args=(seq, wav_path, mic_lang, mic_pending_results, mic_results_lock, _mic_use_remote),
                                 daemon=True,
                             ).start()
                         else:
@@ -8995,15 +9124,25 @@ def _is_zh_hallucination(text):
     # 重複模式偵測 2：任何字元連續出現 6 次以上
     if re.search(r'(.)\1{5,}', _t):
         return True
-    # 重複模式偵測 3：任意位置 2-4 字元片段連續重複 4 次以上（如「有多少多少多少多少...」）
-    if len(_t) >= 8 and re.search(r'(.{2,4})\1{3,}', _t):
+    # 重複模式偵測 3：任意位置 2-8 字元片段連續重複 4 次以上（如「有多少多少多少多少...」「prova prova prova...」）
+    if len(_t) >= 8 and re.search(r'(.{2,8})\1{3,}', _t):
         return True
+    # 重複模式偵測 4：同一個單詞（含空格）重複出現 5 次以上
+    _words = _t.split()
+    if len(_words) >= 5:
+        from collections import Counter as _WC
+        _wc = _WC(_words)
+        _top_word, _top_count = _wc.most_common(1)[0]
+        if _top_count >= 5 and _top_count / len(_words) > 0.5:
+            return True
     # 太短的中文（去除標點後不到 2 個字）
     _stripped = re.sub(r'[^\u4e00-\u9fff\u3040-\u30ff]', '', _t)
+    if _stripped.startswith("字幕") and len(_stripped) <= 6:
+        return True
     if len(_stripped) < 2:
         return True
     # 簡體+繁體關鍵字都要檢查（faster-whisper 可能輸出簡體）
-    return any(kw in text for kw in (
+    if any(kw in text for kw in (
         # YouTube 用語
         "訂閱", "订阅", "歡迎訂閱", "欢迎订阅",
         "點贊", "点赞", "點讚", "按讚", "轉發", "转发", "打賞", "打赏",
@@ -9011,10 +9150,12 @@ def _is_zh_hallucination(text):
         "感謝收聽", "感谢收听", "感謝聆聽", "感谢聆听",
         "喜歡的話", "喜欢的话", "別忘了", "别忘了",
         # 字幕/翻譯歸屬（Amara.org 訓練資料殘留）
-        "字幕由", "字幕提供", "字幕by", "字幕BY", "字幕志願", "字幕志愿", "字幕組", "字幕组",
+        "字幕由", "字幕提供", "字幕by", "字幕BY",
+        "中文字幕", "繁體中文", "简体中文", "擁體中文",
+        "字幕志願", "字幕志愿", "字幕組", "字幕组",
         "字幕視聽", "字幕视听", "字幕製作", "字幕制作",
         "翻譯志願", "翻译志愿", "校對志願", "校对志愿",
-        "Amara", "amara",
+        "Amara", "amara", "Saya", "saya", "prova", "Prova",
         # 版權歸屬幻覺（僅短句時過濾，長句可能是真實討論）
         "版權所有", "版权所有",
         "初音ミク", "初音",
@@ -9022,9 +9163,10 @@ def _is_zh_hallucination(text):
         "獨播", "独播", "劇場", "剧场", "YoYo", "Television Series",
         "明鏡", "明镜", "新聞頻道", "新闻频道",
         "直播間", "直播间", "觀眾朋友", "观众朋友",
-    ))
+    )):
+        return True
     # 短句限定：音樂/版權歸屬幻覺（長句中出現這些詞可能是真實討論，不過濾）
-    if len(_stripped) <= 10:
+    if len(_stripped) <= 20:
         return any(kw in text for kw in (
             "詞曲", "词曲", "作詞", "作词", "作曲", "編曲", "编曲",
             "詞：", "词：", "曲：", "演唱", "原唱",
@@ -10607,6 +10749,8 @@ def summarize_log_file(input_path, model, host, port, server_type="ollama",
             prompt = _summary_prompt(chunk, topic=topic, summary_mode=summary_mode)
             seg = call_ollama_raw(prompt, model, host, port, spinner=sbar, live_output=True,
                                   server_type=server_type)
+            seg = re.sub(r'<think>[\s\S]*?</think>', '', seg).strip()
+            seg = re.sub(r'<think>[\s\S]*', '', seg).strip()
             seg = S2TWP.convert(seg)
             segment_summaries.append(seg)
             print(f"  {C_OK}第 {i+1}/{len(chunks)} 段完成{RESET}", flush=True)
@@ -10695,6 +10839,8 @@ def summarize_log_file(input_path, model, host, port, server_type="ollama",
         _retry_result = call_ollama_raw(_retry_prompt, model, host, port, spinner=sbar_retry,
                                         live_output=True, server_type=server_type)
         sbar_retry.stop()
+        _retry_result = re.sub(r'<think>[\s\S]*?</think>', '', _retry_result).strip()
+        _retry_result = re.sub(r'<think>[\s\S]*', '', _retry_result).strip()
         _retry_result = S2TWP.convert(_retry_result)
         # 將重點摘要放在前面，校正逐字稿放在後面
         summary = _retry_result.rstrip() + "\n\n" + summary.lstrip()
@@ -10725,6 +10871,8 @@ def summarize_log_file(input_path, model, host, port, server_type="ollama",
         _tc_result = call_ollama_raw(_tc_prompt, model, host, port, spinner=sbar_tc,
                                       live_output=True, server_type=server_type)
         sbar_tc.stop()
+        _tc_result = re.sub(r'<think>[\s\S]*?</think>', '', _tc_result).strip()
+        _tc_result = re.sub(r'<think>[\s\S]*', '', _tc_result).strip()
         _tc_result = S2TWP.convert(_tc_result)
         summary = summary.rstrip() + "\n\n" + _tc_result.lstrip()
         print(f"  {C_OK}校正逐字稿已補上{RESET}")
@@ -10748,6 +10896,8 @@ def summarize_log_file(input_path, model, host, port, server_type="ollama",
                     _r_prompt = _summary_prompt(chunk, topic=topic, summary_mode=summary_mode)
                     _r_seg = call_ollama_raw(_r_prompt, model, host, port, spinner=sbar_r,
                                              live_output=False, server_type=server_type)
+                    _r_seg = re.sub(r'<think>[\s\S]*?</think>', '', _r_seg).strip()
+                    _r_seg = re.sub(r'<think>[\s\S]*', '', _r_seg).strip()
                     _r_segs.append(S2TWP.convert(_r_seg))
                 sbar_r.set_task(f"第 {ri} 次 - 合併")
                 _r_combined = "\n\n---\n\n".join(
@@ -10788,6 +10938,10 @@ def summarize_log_file(input_path, model, host, port, server_type="ollama",
     import re as _re_fmt
     summary = _re_fmt.sub(r'#{2,4}\s*(?:最終)?(?:重點)?摘要', '## 重點摘要', summary)
     summary = _re_fmt.sub(r'#{2,4}\s*(?:校正)?逐字稿', '## 校正逐字稿', summary)
+
+    # 移除 <think>...</think> 標籤（部分模型如 Qwen3 會自動思考）
+    summary = re.sub(r'<think>[\s\S]*?</think>', '', summary).strip()
+    summary = re.sub(r'<think>[\s\S]*', '', summary).strip()
 
     summary = S2TWP.convert(summary)
 
@@ -13131,10 +13285,9 @@ def main():
                 print(f"[錯誤] 雙向模式不支援 {model_name}（僅英文模型），請用多語言模型", file=sys.stderr)
                 sys.exit(1)
 
-            # Apple Silicon + mlx-whisper 自動偵測（--asr faster-whisper 可退回）
-            _use_mlx_bidi = False
-            if _is_apple_silicon() and _has_mlx_whisper() and args.asr != "faster-whisper":
-                _use_mlx_bidi = True
+            # Apple Silicon + mlx-whisper 自動偵測（依記憶體決定，--asr faster-whisper 可退回）
+            _bidi_engine, _ = _recommended_mic_engine(mode, REMOTE_WHISPER_CONFIG)
+            _use_mlx_bidi = (_bidi_engine == "mlx") and args.asr != "faster-whisper"
 
             # 翻譯引擎
             meeting_topic = args.topic
@@ -13185,6 +13338,8 @@ def main():
             if not _confirm_start(_build_cli_command(**_cli_kw)):
                 sys.exit(0)
             print()
+            # 麥克風遠端辨識：有 GPU 伺服器時麥克風也送遠端
+            _mic_remote = REMOTE_WHISPER_CONFIG if REMOTE_WHISPER_CONFIG else None
             run_stream_bidirectional(_bidi_lb_id, _bidi_mic_id,
                                      translator_lb, translator_mic,
                                      model_name, mode,
@@ -13192,7 +13347,8 @@ def main():
                                      record=args.record,
                                      meeting_topic=meeting_topic,
                                      use_mlx=_use_mlx_bidi,
-                                     denoise=args.denoise)
+                                     denoise=args.denoise,
+                                     mic_remote_cfg=_mic_remote)
             sys.exit(0)
 
         # --mic 衝突檢查
@@ -13225,9 +13381,7 @@ def main():
         # GPU 伺服器 Whisper 即時模式（非 Moonshine、非 --local-asr）
         use_remote_cli = (REMOTE_WHISPER_CONFIG and not args.local_asr
                           and asr_engine != "moonshine")
-        if use_remote_cli and args.mic:
-            print(f"{C_WARN}[警告] --mic 不支援遠端 GPU 模式，忽略 --mic{RESET}")
-            args.mic = False
+        # --mic + GPU 伺服器：麥克風也送遠端辨識（不再限制）
         if use_remote_cli:
             # 伺服器模式：不需本機 whisper-stream
             default_model = "large-v3-turbo"
@@ -13291,12 +13445,39 @@ def main():
             if not _confirm_start(_build_cli_command(**_cli_kw)):
                 sys.exit(0)
             print()
-            run_stream_remote(capture_id, translator, model_name, REMOTE_WHISPER_CONFIG,
-                              mode, length_ms, step_ms,
-                              record=args.record, rec_device=args.rec_device,
-                              force_restart=args.restart_server,
-                              meeting_topic=meeting_topic,
-                              denoise=args.denoise)
+            # --mic + GPU 伺服器：麥克風也送遠端，走雙路架構
+            if args.mic:
+                bidi_devs = _detect_bidi_devices()
+                if bidi_devs:
+                    _mic_lb_id, _, _mic_mic_id, _ = bidi_devs
+                    if getattr(args, 'mic_device', None) is not None:
+                        _mic_mic_id = args.mic_device
+                    print(f"\n{C_DIM}--mic 模式：麥克風辨識也送 GPU 伺服器{RESET}")
+                    run_stream_bidirectional(_mic_lb_id, _mic_mic_id,
+                                             translator, None,
+                                             model_name, mode,
+                                             length_ms=length_ms, step_ms=step_ms,
+                                             record=args.record,
+                                             meeting_topic=meeting_topic,
+                                             use_mlx=False,
+                                             mic_translate=False,
+                                             denoise=args.denoise,
+                                             mic_remote_cfg=REMOTE_WHISPER_CONFIG)
+                else:
+                    print(f"{C_WARN}[警告] 偵測不到麥克風裝置，忽略 --mic{RESET}")
+                    run_stream_remote(capture_id, translator, model_name, REMOTE_WHISPER_CONFIG,
+                                      mode, length_ms, step_ms,
+                                      record=args.record, rec_device=args.rec_device,
+                                      force_restart=args.restart_server,
+                                      meeting_topic=meeting_topic,
+                                      denoise=args.denoise)
+            else:
+                run_stream_remote(capture_id, translator, model_name, REMOTE_WHISPER_CONFIG,
+                                  mode, length_ms, step_ms,
+                                  record=args.record, rec_device=args.rec_device,
+                                  force_restart=args.restart_server,
+                                  meeting_topic=meeting_topic,
+                                  denoise=args.denoise)
         elif asr_engine == "moonshine":
             check_dependencies(asr_engine)
             # Moonshine 模式
@@ -13452,21 +13633,24 @@ def main():
                     _mic_lb_id, _, _mic_mic_id, _ = bidi_devs
                     if getattr(args, 'mic_device', None) is not None:
                         _mic_mic_id = args.mic_device
-                    _use_mlx = _is_apple_silicon() and _has_mlx_whisper() and args.asr != "faster-whisper"
-                    # 效能檢查：--mic 改用 faster-whisper/mlx-whisper，模型可能需要調整
-                    _mic_rec_model = _recommended_whisper_model(mode)
-                    _mic_model = model_name
-                    if not _use_mlx and not _has_local_gpu():
-                        # 無 GPU 加速，大模型在 faster-whisper CPU 上會太慢
-                        _big_models = ("large-v3-turbo", "large-v3", "medium", "medium.en")
+                    # 麥克風引擎選擇：依記憶體自動決定 mlx GPU / CPU
+                    _mic_engine, _mic_rec_model = _recommended_mic_engine(mode, REMOTE_WHISPER_CONFIG)
+                    _use_mlx = (_mic_engine == "mlx") and args.asr != "faster-whisper"
+                    _mic_model = model_name if _use_mlx else _mic_rec_model
+                    _mem_gb = _get_system_memory_gb()
+                    if _use_mlx:
+                        print(f"\n{C_DIM}--mic 模式：使用 mlx-whisper GPU 加速（{_mic_model}，記憶體 {_mem_gb:.0f}GB）{RESET}")
+                    elif not _has_local_gpu():
+                        _big_models = ("large-v3-turbo", "large-v3")
                         if model_name in _big_models and _mic_rec_model not in _big_models:
-                            print(f"\n{C_WARN}[效能提示] --mic 模式改用 faster-whisper 雙路辨識（非 whisper-stream）{RESET}")
-                            print(f"  {C_WARN}此裝置無 GPU 加速，{model_name} 辨識可能太慢（每段 10s+）{RESET}")
-                            print(f"  {C_WARN}自動調整為 {_mic_rec_model}（適合此裝置的 faster-whisper 模型）{RESET}")
+                            print(f"\n{C_WARN}[效能提示] --mic 模式改用 faster-whisper 雙路辨識{RESET}")
+                            if _mem_gb and _mem_gb < 16:
+                                print(f"  {C_WARN}記憶體 {_mem_gb:.0f}GB 不足，不啟用 mlx GPU 加速{RESET}")
+                            print(f"  {C_WARN}自動調整為 {_mic_rec_model}（適合此裝置）{RESET}")
                             _mic_model = _mic_rec_model
-                    elif not _use_mlx:
-                        # 有 GPU 但不是 mlx，提示引擎切換
-                        print(f"\n{C_DIM}--mic 模式：ASR 引擎切換為 faster-whisper 雙路辨識{RESET}")
+                    else:
+                        print(f"\n{C_DIM}--mic 模式：ASR 引擎 faster-whisper 雙路辨識{RESET}")
+                    _mic_remote = REMOTE_WHISPER_CONFIG if (_mic_engine == "remote") else None
                     run_stream_bidirectional(_mic_lb_id, _mic_mic_id,
                                              translator, None,
                                              _mic_model, mode,
@@ -13475,7 +13659,8 @@ def main():
                                              meeting_topic=meeting_topic,
                                              use_mlx=_use_mlx,
                                              mic_translate=False,
-                                             denoise=args.denoise)
+                                             denoise=args.denoise,
+                                             mic_remote_cfg=_mic_remote)
                     sys.exit(0)
             if _cli_use_local_fw:
                 run_stream_local_whisper(capture_id, translator, model_name, mode,
@@ -13524,10 +13709,9 @@ def main():
             # 強制多語言 faster-whisper 模型
             model_name, _ = select_whisper_model(mode, use_faster_whisper=True)
 
-            # Apple Silicon + mlx-whisper 自動偵測
-            _use_mlx_bidi = False
-            if _is_apple_silicon() and _has_mlx_whisper():
-                _use_mlx_bidi = True
+            # Apple Silicon + mlx-whisper 自動偵測（依記憶體決定）
+            _bidi_engine, _ = _recommended_mic_engine(mode, REMOTE_WHISPER_CONFIG)
+            _use_mlx_bidi = (_bidi_engine == "mlx")
 
             # 選擇翻譯引擎（排除 Argos）
             engine, model, host, port, srv_type = select_translator(mode=mode)
@@ -13568,6 +13752,7 @@ def main():
             if not _confirm_start(_build_cli_command(**_cli_kw)):
                 sys.exit(0)
             print()
+            _mic_remote = REMOTE_WHISPER_CONFIG if REMOTE_WHISPER_CONFIG else None
             run_stream_bidirectional(_bidi_lb_id, _bidi_mic_id,
                                      translator_lb, translator_mic,
                                      model_name, mode,
@@ -13575,7 +13760,8 @@ def main():
                                      record=record_bidi,
                                      meeting_topic=meeting_topic,
                                      use_mlx=_use_mlx_bidi,
-                                     denoise=args.denoise)
+                                     denoise=args.denoise,
+                                     mic_remote_cfg=_mic_remote)
             sys.exit(0)
 
         # 轉錄模式：提前詢問麥克風轉錄（影響辨識位置預設值）
@@ -13756,15 +13942,19 @@ def main():
                 if use_mic and bidi_devs:
                     # --mic 互動模式：切換到雙路架構
                     _mic_lb_id, _, _mic_mic_id, _ = bidi_devs
-                    _use_mlx_mic = _is_apple_silicon() and _has_mlx_whisper()
-                    # 效能檢查：模型是否適合 faster-whisper/mlx-whisper 雙路
-                    _mic_model = model_name
-                    _mic_rec_model = _recommended_whisper_model(mode)
-                    if not _use_mlx_mic and not _has_local_gpu():
-                        _big_models = ("large-v3-turbo", "large-v3", "medium", "medium.en")
+                    # 麥克風引擎選擇：依記憶體自動決定 mlx GPU / CPU
+                    _mic_engine, _mic_rec_model = _recommended_mic_engine(mode, REMOTE_WHISPER_CONFIG)
+                    _use_mlx_mic = (_mic_engine == "mlx")
+                    _mic_model = model_name if _use_mlx_mic else _mic_rec_model
+                    _mem_gb = _get_system_memory_gb()
+                    if _use_mlx_mic:
+                        print(f"\n{C_DIM}麥克風轉錄：使用 mlx-whisper GPU 加速（{_mic_model}，記憶體 {_mem_gb:.0f}GB）{RESET}")
+                    elif not _has_local_gpu():
+                        _big_models = ("large-v3-turbo", "large-v3")
                         if model_name in _big_models and _mic_rec_model not in _big_models:
                             print(f"\n{C_WARN}[效能提示] 麥克風轉錄改用 faster-whisper 雙路辨識{RESET}")
-                            print(f"  {C_WARN}此裝置無 GPU 加速，{model_name} 辨識可能太慢{RESET}")
+                            if _mem_gb and _mem_gb < 16:
+                                print(f"  {C_WARN}記憶體 {_mem_gb:.0f}GB，不啟用 mlx GPU 加速{RESET}")
                             print(f"  {C_WARN}自動調整為 {_mic_rec_model}{RESET}")
                             _mic_model = _mic_rec_model
                     _need_llm = mode in _TRANSLATE_MODES and engine == "llm"
@@ -13777,6 +13967,7 @@ def main():
                                    mic=True, denoise=args.denoise)
                     if not _confirm_start(_build_cli_command(**_cli_kw)):
                         sys.exit(0)
+                    _mic_remote = REMOTE_WHISPER_CONFIG if (_mic_engine == "remote") else None
                     run_stream_bidirectional(_mic_lb_id, _mic_mic_id,
                                              translator, None,
                                              _mic_model, mode,
@@ -13785,7 +13976,8 @@ def main():
                                              meeting_topic=meeting_topic,
                                              use_mlx=_use_mlx_mic,
                                              mic_translate=False,
-                                             denoise=args.denoise)
+                                             denoise=args.denoise,
+                                             mic_remote_cfg=_mic_remote)
                 elif _use_local_fw:
                     # Windows WASAPI + faster-whisper 本機辨識
                     capture_id = list_audio_devices_sd()

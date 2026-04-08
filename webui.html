@@ -645,8 +645,9 @@ function engChg(){
   let micNote=$('micGpuNote');
   if(!micNote){micNote=document.createElement('div');micNote.id='micGpuNote';micNote.style.cssText='display:none;margin-top:8px;padding:8px 12px;border-radius:6px;font-size:12px;line-height:1.5;background:rgba(253,126,20,.1);color:var(--orange);border:1px solid rgba(253,126,20,.25)';micLabel.parentElement.parentElement.appendChild(micNote)}
   if(!isFile&&!isRec){
-    if(isGpu){micEl.checked=false;micEl.disabled=true;micLabel.style.opacity='.5';micNote.style.display='block';micNote.innerHTML='<b>轉錄麥克風</b>需要本機辨識，GPU 伺服器模式不支援。<br>如需同時轉錄麥克風，請將辨識位置切換為「本機」。'}
-    else{micEl.disabled=false;micLabel.style.opacity='';micNote.style.display='none'}
+    micEl.disabled=false;micLabel.style.opacity='';
+    if(isGpu){micNote.style.display='block';micNote.style.background='rgba(13,110,253,.06)';micNote.style.color='var(--accent)';micNote.style.borderColor='rgba(13,110,253,.2)';micNote.innerHTML='麥克風辨識也會送到 GPU 伺服器處理。'}
+    else{micNote.style.display='none'}
   }else{micNote.style.display='none'}
 }
 let _sumDescs={};
@@ -827,7 +828,7 @@ function _renderMsg(ev){dot.classList.add('on');if(cnt===0)$('bInfo').textConten
   if(aScr)requestAnimationFrame(()=>{msgsEl.scrollTop=msgsEl.scrollHeight})}
 /* WS */
 function conn(){const p=location.protocol==='https:'?'wss:':'ws:';const _wsUrl=p+'//'+location.host+'/ws'+(_authToken?'?token='+encodeURIComponent(_authToken):'');ws=new WebSocket(_wsUrl);ws.onopen=()=>{if(rTimer){clearInterval(rTimer);rTimer=null}};
-  ws.onmessage=e=>{try{const ev=JSON.parse(e.data);if(ev.type==='transcription')addMsg(ev);else if(ev.type==='started'){curCfg.modeLabel=_modeLabels[ev.mode]||ev.mode;curCfg.mode=ev.mode;if(!_isSwitching){showLive()}dot.classList.add('on')}else if(ev.type==='stopped'&&!_isSwitching)showSetup();else if(ev.type==='disconnected'){if(_isSwitching)return;dot.classList.remove('on');showDisconnected(ev.message||'主程式已結束')}else if(ev.type==='switching'){$('bInfo').textContent=ev.message||'切換中...'}else if(ev.type==='rms'&&ev.value!=null)pushVol(ev.value);else if(ev.type==='output_files'){_outputFiles=ev.files||[];_outputDirs=ev.dirs||[]}else if(ev.type==='keyword_alert'){_handleKeywordAlert(ev)}else if(ev.type==='correction'){addCorrection(ev)}else if(ev.type==='progress'){$('bInfo').textContent=ev.stage+(ev.detail?' — '+ev.detail:'')}}catch(x){}};
+  ws.onmessage=e=>{try{const ev=JSON.parse(e.data);if(ev.type==='transcription')addMsg(ev);else if(ev.type==='started'){curCfg.modeLabel=_modeLabels[ev.mode]||ev.mode;curCfg.mode=ev.mode;if(!_isSwitching){showLive()}dot.classList.add('on')}else if(ev.type==='stopped'&&!_isSwitching){if(curCfg.isFile){showSetup()}else{showDisconnected('辨識已停止')}}else if(ev.type==='disconnected'){if(_isSwitching)return;dot.classList.remove('on');showDisconnected(ev.message||'主程式已結束')}else if(ev.type==='switching'){$('bInfo').textContent=ev.message||'切換中...'}else if(ev.type==='rms'&&ev.value!=null)pushVol(ev.value);else if(ev.type==='output_files'){_outputFiles=ev.files||[];_outputDirs=ev.dirs||[]}else if(ev.type==='keyword_alert'){_handleKeywordAlert(ev)}else if(ev.type==='correction'){addCorrection(ev)}else if(ev.type==='progress'){$('bInfo').textContent=ev.stage+(ev.detail?' — '+ev.detail:'')}}catch(x){}};
   ws.onclose=()=>{dot.classList.remove('on');if($('pLive').classList.contains('on')&&!_discShown){_discShown=true;showDisconnected('與伺服器的連線已中斷')}if(!rTimer)rTimer=setInterval(()=>{if(!ws||ws.readyState===WebSocket.CLOSED)conn()},3000)};ws.onerror=()=>ws.close()}
 // Tooltips
 const _tips={

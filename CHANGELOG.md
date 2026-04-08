@@ -1,5 +1,37 @@
 # Changelog
 
+### v2.16.1 (2026-04-08)
+
+**修正**
+- 摘要與校正逐字稿移除 `<think>...</think>` 思考標籤：部分 LLM（如 Qwen3）會在回覆中夾帶思考過程，導致摘要 / 校正逐字稿混入雜訊
+- 套用範圍涵蓋 5 個產出點：逐段摘要、補產重點摘要、補產校正逐字稿、多次處理之逐段結果、最終摘要輸出
+- 雙向 / 麥克風並存模式 macOS PortAudio `-9986`（paInternalError）：
+  - 根因：CoreAudio 若預先建立兩個 InputStream（BlackHole + 內建麥克風）後再依序 start，第二路 start 必然失敗
+  - 修法 1：mic_stream 改為延後到 `lb_stream.start()` 之後才建立並啟動（與 macOS CoreAudio 設備配置流程相容）
+  - 修法 2：mic_stream 啟動加入三段式 fallback —— 原始 blocksize → `blocksize=0, latency='high'` → `blocksize=4800, latency='high'`，全部失敗才報錯並提供排查指引
+
+**效能**
+- WebUI 開啟時「載入設定中…」冷啟動延遲大幅縮短（約 2.5 秒 → 接近 0 秒）
+  - `_has_mlx_whisper()` 改用 `importlib.util.find_spec` 偵測，不再實際 `import mlx_whisper`（省下首次匯入 MLX 框架約 1.2 秒）
+  - `_is_apple_silicon` / `_has_local_gpu` / `_has_mlx_whisper` / `_get_system_memory_gb` / `_recommended_whisper_model` 加上 `lru_cache`，避免 `/api/config` 內 10 種模式重複偵測硬體
+  - `webui.py` 將 `from translate_meeting import …` 提升至模組層級，首次 `/api/config` 不再因 lazy import 付出 1.2 秒成本
+
+### v2.16.0 (2026-03-27)
+
+**新功能**
+- 麥克風辨識支援 GPU 伺服器：系統音訊與麥克風兩路都可送 GPU 伺服器辨識，macOS / Windows 皆適用
+- 麥克風辨識支援 mlx-whisper GPU 加速（Apple Silicon）：依記憶體自動選擇引擎與模型
+  - 24GB+ → mlx large-v3-turbo
+  - 16GB → mlx small
+  - 8GB 以下 → CPU small（不啟用 mlx 避免 swap）
+- 新增 `_get_system_memory_gb()` 系統記憶體偵測（macOS / Windows / Linux）
+- 新增 `_recommended_mic_engine()` 麥克風引擎自動選擇（remote > mlx > cpu）
+- GPU 伺服器辨識失敗時自動降級本機（mlx 或 CPU），顯示提示訊息
+
+**改進**
+- WebUI「轉錄麥克風」不再限制 GPU 伺服器模式，改為藍色提示「麥克風辨識也會送到 GPU 伺服器處理」
+- 選擇 GPU 伺服器辨識時，系統音訊與麥克風兩路都走遠端（不再一路遠端一路本機）
+
 ### v2.15.5 (2026-03-25)
 
 **改進**

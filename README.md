@@ -1,4 +1,4 @@
-# jt-live-whisper v2.15.5
+# jt-live-whisper v2.16.1
 
 **100% 全地端 AI 語音工具集**：即時轉錄、即時翻譯、錄音檔批次處理、講者辨識、會議摘要，所有 AI 模型皆在自有設備上執行，資料不經過任何雲端服務。
 
@@ -67,9 +67,12 @@ Author: Jason Cheng (Jason Tools)
 
 ## 兩種部署方式
 
-- **單機模式**： 一台 Mac 或 Windows PC 即可完成所有處理。語音辨識（Whisper/Moonshine）、翻譯（LLM/NLLB/Argos）全部在本機執行，不需要額外硬體。適合個人使用、外出攜帶。
+- **單機模式**：一台 Mac 或 Windows PC 即可完成所有處理，不需要額外硬體。
+  - **macOS Apple Silicon**（M1/M2/M3/M4）：透過 mlx-whisper 啟用 Metal GPU 加速，辨識速度約 1-3 秒
+  - **Windows + NVIDIA GPU**：安裝程式自動偵測並啟用 CUDA 加速，單機就能享受 GPU 加速效能（辨識約 0.5-1 秒），不需另架 GPU 伺服器
+  - **Windows 無 GPU / macOS Intel**：CPU 辨識，搭配 small 模型可用
 
-- **本機 + GPU 伺服器模式**： 本機負責音訊擷取與介面操作，語音辨識和講者辨識交由區域網路內的 GPU 伺服器（如 DGX Spark，或安裝有 NVIDIA GPU 的 Ubuntu/Linux 主機，搭消費級 RTX 4090/5090 之類亦可，需已安裝 CUDA）處理。離線辨識速度快 5-10 倍，仍然是全地端架構，資料僅在區域網路內傳輸。適合需要處理大量音訊或追求即時辨識品質的場景。
+- **本機 + GPU 伺服器模式**：本機負責音訊擷取與介面操作，語音辨識和講者辨識交由區域網路內的 GPU 伺服器處理（系統音訊和麥克風兩路都可送遠端）。離線辨識速度快 5-10 倍，即時辨識約 0.3-0.5 秒。適合需要處理大量音訊或追求最佳即時辨識品質的場景。GPU 伺服器可以是 DGX Spark、安裝有 NVIDIA GPU 的 Ubuntu/Linux 主機，搭消費級 RTX 4090/5090 之類亦可（需已安裝 CUDA）。
 
 兩種模式可隨時切換，伺服器離線時自動降級為本機處理，不中斷使用。
 
@@ -722,7 +725,7 @@ WebUI 瀏覽器介面（./start.sh --webui）：
 | RTX 4060 Ti（16 GB） | 流暢 | ~20-30 秒 | VRAM 充裕，未來擴充空間大 |
 | RTX 3060（12 GB） | 流暢 | ~40-50 秒 | 上一代，二手性價比高 |
 
-> Windows 搭配 NVIDIA GPU（CUDA）可大幅加速 faster-whisper 語音辨識。large-v3-turbo 模型約需 3 GB VRAM，**最低建議 6 GB VRAM 的顯示卡**。沒有獨顯的 Windows 電腦仍可使用，但離線處理速度會慢很多，即時辨識延遲也較高。
+> **Windows + NVIDIA GPU 是最簡單的高效能方案**：不需要額外硬體或伺服器設定，安裝後直接使用 large-v3-turbo 模型，即時辨識和離線處理都有 CUDA 加速。最低建議 6 GB VRAM 的 NVIDIA 顯示卡。沒有獨顯的 Windows 電腦仍可使用，但速度會慢很多。
 
 ### GPU 伺服器（選配，語音辨識加速用）
 

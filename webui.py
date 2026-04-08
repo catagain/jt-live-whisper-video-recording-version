@@ -45,6 +45,18 @@ BASE_DIR = Path(__file__).parent
 TRANSLATE_SCRIPT = BASE_DIR / "translate_meeting.py"
 CONFIG_FILE = BASE_DIR / "config.json"
 
+# 預先匯入 translate_meeting，避免首次 /api/config 才 lazy import 造成冷啟動延遲
+try:
+    from translate_meeting import (
+        WHISPER_MODELS as _TM_WHISPER_MODELS,
+        SUMMARY_MODELS as _TM_SUMMARY_MODELS,
+        _recommended_whisper_model as _tm_recommended_whisper_model,
+    )
+except Exception:
+    _TM_WHISPER_MODELS = None
+    _TM_SUMMARY_MODELS = None
+    _tm_recommended_whisper_model = None
+
 # ─── 安全設定 ──────────────────────────────────────────────────
 _webui_passwords = {"read": "", "admin": ""}  # 從 config.json 載入
 def _load_passwords():
@@ -295,8 +307,9 @@ def _get_config():
         {"value": "subtitle", "label": "快速字幕（3秒）"},
     ]
     try:
-        from translate_meeting import WHISPER_MODELS as _WM
-        models = [{"value": n, "label": f"{n}（{d}）"} for n, _, d in _WM]
+        if _TM_WHISPER_MODELS is None:
+            raise ImportError("translate_meeting not loaded")
+        models = [{"value": n, "label": f"{n}（{d}）"} for n, _, d in _TM_WHISPER_MODELS]
     except Exception:
         models = [
             {"value": "base.en", "label": "base.en（最快，準確度一般）"},
@@ -385,17 +398,19 @@ def _get_config():
     # 推薦模型（根據裝置 + 模式自動偵測）
     recommended_models = {}
     try:
-        from translate_meeting import _recommended_whisper_model
-        for m_info in modes:
-            recommended_models[m_info["value"]] = _recommended_whisper_model(m_info["value"])
+        if _tm_recommended_whisper_model is not None:
+            for m_info in modes:
+                recommended_models[m_info["value"]] = _tm_recommended_whisper_model(m_info["value"])
     except Exception:
         pass
     # 摘要模型說明（從 translate_meeting.py 的 SUMMARY_MODELS）
     summary_descs = {}
     try:
-        from translate_meeting import SUMMARY_MODELS
-        summary_descs = {n: d for n, d in SUMMARY_MODELS if d}
+        if _TM_SUMMARY_MODELS is not None:
+            summary_descs = {n: d for n, d in _TM_SUMMARY_MODELS if d}
     except Exception:
+        pass
+    if not summary_descs:
         summary_descs = {"gpt-oss:120b": "品質最好（推薦）", "gpt-oss:20b": "速度快，品質一般"}
     return {
         "modes": modes, "scenes": scenes, "models": models, "engines": engines,
@@ -404,7 +419,7 @@ def _get_config():
         "gpu_host": gpu_host, "summary_descs": summary_descs,
         "recommended_models": recommended_models,
         "default_engine": "llm" if llm_host else "nllb",
-        "last": last, "version": "2.15.5",
+        "last": last, "version": "2.16.1",
         "has_read_pw": bool(_webui_passwords["read"]),
         "has_admin_pw": bool(_webui_passwords["admin"]),
     }
