@@ -6,6 +6,8 @@
     python3 webui.py             # 直接啟動
 
 瀏覽器中完成所有設定，點「開始」後自動啟動 translate_meeting.py。
+
+Copyright (c) 2026 貓又CatAgain (modified parts)
 """
 
 import argparse

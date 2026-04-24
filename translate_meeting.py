@@ -5,6 +5,7 @@
 使用 whisper.cpp stream 即時轉錄，再翻譯成繁體中文。
 
 Author: Jason Cheng (Jason Tools)
+Copyright (c) 2026 貓又CatAgain (modified parts)
 """
 
 import argparse

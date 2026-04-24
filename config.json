@@ -1,4 +1,5 @@
 {
+  "copyright_notice": "Copyright (c) 2026 貓又CatAgain (modified parts)",
   "llm_host": "127.0.0.1",
   "llm_port": 11434,
   "last_llm_model": "gemma4:latest",

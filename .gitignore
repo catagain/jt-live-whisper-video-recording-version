@@ -1,3 +1,5 @@
+# Copyright (c) 2026 貓又CatAgain (modified parts)
+
 # Python cache and bytecode
 __pycache__/
 *.py[cod]

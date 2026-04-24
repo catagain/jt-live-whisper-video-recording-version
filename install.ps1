@@ -10,6 +10,7 @@
     .\install.ps1 -Upgrade
 .NOTES
     Author: Jason Cheng (Jason Tools)
+    Copyright (c) 2026 貓又CatAgain (modified parts)
 #>
 
 param(

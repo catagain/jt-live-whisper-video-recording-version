@@ -8,6 +8,7 @@
 核心功能涵蓋即時畫面錄製、語音轉錄、中日英即時翻譯字幕、離線音訊檔批次處理、講者辨識（Speaker Diarization）、以及 LLM 會議摘要產出。採用系統音訊裝置層級擷取（macOS 使用 BlackHole，Windows 使用 WASAPI Loopback），**理論上任何軟體的聲音輸出都能即時處理**：視訊會議（Zoom、Teams、Meet）、YouTube、Podcast、串流影片等，不限定特定應用程式。所有 AI 推論皆由地端模型完成，全程不經過第三方雲端 API。
 
 Author: Jason Cheng (Jason Tools)、貓又 CatAgain
+Copyright (c) 2026 貓又CatAgain (modified parts)
 
 ![即時英翻中字幕運作中](images/realtime-en2zh-1.png)
 

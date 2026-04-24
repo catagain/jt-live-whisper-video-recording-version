@@ -11,6 +11,7 @@
     .\start.ps1 --mode zh2en
 .NOTES
     Author: Jason Cheng (Jason Tools)
+    Copyright (c) 2026 貓又CatAgain (modified parts)
 #>
 
 Set-StrictMode -Version Latest
