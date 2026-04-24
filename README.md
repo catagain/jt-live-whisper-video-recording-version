@@ -1,13 +1,13 @@
-# jt-live-whisper v2.16.1
+# jt-live-whisper v2.16.1 - video recording specialization mode
 
-**100% 全地端 AI 語音工具集**：即時轉錄、即時翻譯、錄音檔批次處理、講者辨識、會議摘要，所有 AI 模型皆在自有設備上執行，資料不經過任何雲端服務。
+**100% 全地端 AI 語音工具集 - 螢幕錄影版本**：即時畫面錄製、轉錄、即時翻譯、錄音檔批次處理、講者辨識、會議摘要，所有 AI 模型皆在自有設備上執行，資料不經過任何雲端服務。
 
 | **目錄** | [核心功能](#核心功能) · [其他特色](#其他特色) · [系統需求](#系統需求) · [快速開始](#快速開始) · [使用方式](#使用方式) · [互動式選單](#互動式選單功能一覽) · [命令列參數](#命令列參數) · [技術架構](#技術架構) · [硬體建議](#硬體建議) · [升級](#升級) |
 |---|---|
 
-核心功能涵蓋即時語音轉錄、中日英即時翻譯字幕、離線音訊檔批次處理、講者辨識（Speaker Diarization）、以及 LLM 會議摘要產出。採用系統音訊裝置層級擷取（macOS 使用 BlackHole，Windows 使用 WASAPI Loopback），**理論上任何軟體的聲音輸出都能即時處理**：視訊會議（Zoom、Teams、Meet）、YouTube、Podcast、串流影片等，不限定特定應用程式。所有 AI 推論皆由地端模型完成，全程不經過第三方雲端 API。
+核心功能涵蓋即時畫面錄製、語音轉錄、中日英即時翻譯字幕、離線音訊檔批次處理、講者辨識（Speaker Diarization）、以及 LLM 會議摘要產出。採用系統音訊裝置層級擷取（macOS 使用 BlackHole，Windows 使用 WASAPI Loopback），**理論上任何軟體的聲音輸出都能即時處理**：視訊會議（Zoom、Teams、Meet）、YouTube、Podcast、串流影片等，不限定特定應用程式。所有 AI 推論皆由地端模型完成，全程不經過第三方雲端 API。
 
-Author: Jason Cheng (Jason Tools)
+Author: Jason Cheng (Jason Tools)、貓又 CatAgain
 
 ![即時英翻中字幕運作中](images/realtime-en2zh-1.png)
 
@@ -86,8 +86,8 @@ Author: Jason Cheng (Jason Tools)
 
 ## 核心功能
 
-### 1. 即時語音轉錄翻譯（主要功能）
-擷取系統音訊（macOS / Windows），本地端 AI 即時辨識語音並翻譯成繁體中文字幕顯示於終端機。開會、看影片、聽 Podcast 即時翻譯。
+### 1. 即時畫面錄影、語音轉錄翻譯（主要功能）
+擷取系統畫面、攝影機、音訊（macOS / Windows），本地端 AI 即時辨識語音並翻譯成繁體中文字幕顯示於終端機。開會、看影片、聽 Podcast 即時翻譯。
 
 ![即時英翻中字幕畫面（macOS）](images/realtime-en2zh-2.png)
 
@@ -424,6 +424,9 @@ cd C:\jt-live-whisper
 
 # CLI 模式（跳過選單）
 ./start.sh --mode en2zh --engine llm --llm-model qwen2.5:14b
+
+# 畫面錄影模式
+./start.sh --record-video
 
 # 英中雙向字幕（對方英文翻中文 + 自己中文翻英文）
 ./start.sh --mode en_zh
