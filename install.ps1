@@ -749,7 +749,7 @@ if ($HAS_GIT) {
 if (cmd_exists "ffmpeg") {
     check_ok "ffmpeg"
 } else {
-    check_missing "找不到 ffmpeg（處理非 WAV 音訊時需要）"
+    check_missing "找不到 ffmpeg（處理非 WAV 音訊與畫面錄影時需要）"
     $ans = Read-Host "  是否自動安裝 ffmpeg？(Y/n)"
     if ($ans -ne 'n' -and $ans -ne 'N') {
         if (cmd_exists "winget") {
@@ -770,6 +770,26 @@ if (cmd_exists "ffmpeg") {
             info "下載: https://www.gyan.dev/ffmpeg/builds/"
             info "解壓後將 bin 資料夾加入系統 PATH"
         }
+    }
+}
+
+# ffmpeg 畫面錄影能力檢查（Windows: gdigrab + dshow + libx264）
+if (cmd_exists "ffmpeg") {
+    try {
+        $ffDevices = (& ffmpeg -hide_banner -devices 2>&1) -join "`n"
+        $ffEncoders = (& ffmpeg -hide_banner -encoders 2>&1) -join "`n"
+        $hasGdiGrab = $ffDevices -match "gdigrab"
+        $hasDshow = $ffDevices -match "dshow"
+        $hasX264 = $ffEncoders -match "libx264"
+
+        if ($hasGdiGrab -and $hasDshow -and $hasX264) {
+            check_ok "ffmpeg 錄影能力（gdigrab/dshow/libx264）"
+        } else {
+            check_notice "目前 ffmpeg 可能不支援完整錄影（需要 gdigrab/dshow/libx264）"
+            info "  建議安裝完整版本（例如 Gyan full build）"
+        }
+    } catch {
+        check_notice "無法檢查 ffmpeg 錄影能力（可忽略，使用 --record-video 時會再次檢查）"
     }
 }
 
@@ -2373,9 +2393,18 @@ if (venv_import_ok "PyQt6") {
 
 # ffmpeg
 if (cmd_exists "ffmpeg") {
-    check_ok "ffmpeg（音訊轉檔）"
+    check_ok "ffmpeg（音訊轉檔與畫面錄影）"
+    try {
+        $ffDevices = (& ffmpeg -hide_banner -devices 2>&1) -join "`n"
+        $ffEncoders = (& ffmpeg -hide_banner -encoders 2>&1) -join "`n"
+        if (($ffDevices -notmatch "gdigrab") -or ($ffDevices -notmatch "dshow") -or ($ffEncoders -notmatch "libx264")) {
+            check_notice "ffmpeg 可能缺少錄影所需功能（gdigrab/dshow/libx264）"
+        }
+    } catch {
+        check_notice "無法檢查 ffmpeg 錄影能力"
+    }
 } else {
-    check_missing "ffmpeg 未安裝（處理非 WAV 音訊時需要）"
+    check_missing "ffmpeg 未安裝（處理非 WAV 音訊與畫面錄影時需要）"
 }
 
 # ═══════════════════════════════════════════════════════════════
