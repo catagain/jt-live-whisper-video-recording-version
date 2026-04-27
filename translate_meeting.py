@@ -221,6 +221,14 @@ def _speed_badge_color(elapsed):
     return C_BADGE_SLOW
 
 
+def _fmt_session_ts(elapsed_secs: float) -> str:
+    """將 session 相對秒數格式化為 HH:MM:SS，供 TXT 記錄檔使用。"""
+    s = int(max(0.0, elapsed_secs))
+    h, rem = divmod(s, 3600)
+    m, sec = divmod(rem, 60)
+    return f"{h:02d}:{m:02d}:{sec:02d}"
+
+
 # 講者辨識色彩（8 色循環，24-bit 真彩色）
 SPEAKER_COLORS = [
     "\x1b[38;2;255;165;80m",   # 橘色
@@ -784,6 +792,43 @@ def _toggle_pause_state(pause_event):
     if pause_event is None:
         return False
     return _apply_pause_state(pause_event, not pause_event.is_set())
+
+
+class _PauseAwareClock:
+    """A monotonic clock that excludes durations while pause_event is set."""
+
+    def __init__(self, pause_event=None):
+        self._pause_event = pause_event
+        self._lock = threading.Lock()
+        now = time.monotonic()
+        self._started_at = now
+        self._paused_total = 0.0
+        self._pause_started_at = None
+        self._last_paused = bool(pause_event and pause_event.is_set())
+        if self._last_paused:
+            self._pause_started_at = now
+
+    def _sync_locked(self, now):
+        if self._pause_event is None:
+            return
+        paused = self._pause_event.is_set()
+        if paused and not self._last_paused:
+            self._pause_started_at = now
+        elif not paused and self._last_paused:
+            if self._pause_started_at is not None:
+                self._paused_total += max(0.0, now - self._pause_started_at)
+            self._pause_started_at = None
+        self._last_paused = paused
+
+    def elapsed(self):
+        now = time.monotonic()
+        with self._lock:
+            self._sync_locked(now)
+            paused_now = 0.0
+            if self._last_paused and self._pause_started_at is not None:
+                paused_now = max(0.0, now - self._pause_started_at)
+            elapsed = now - self._started_at - self._paused_total - paused_now
+        return max(0.0, elapsed)
 
 
 def _clear_webui_pause_cmd_file():
@@ -4221,7 +4266,9 @@ def run_stream(capture_id: int, translator, model_name: str, model_path: str,
         **_SUBPROCESS_FLAGS,
     )
 
-    # 啟動錄音串流（在 subprocess 啟動後）
+    # 啟動錄影與錄音串流（盡量同時，確保影音同步）
+    if video_recorder:
+        video_recorder.start()
     if rec_stream:
         rec_stream.start()
     if _rec_stream_mic:
@@ -4369,7 +4416,7 @@ def run_stream(capture_id: int, translator, model_name: str, model_path: str,
     _webui_send({"type": "progress", "stage": "", "detail": ""})
     _webui_send({"type": "started", "mode": mode})
 
-    session_started_at = time.monotonic()
+    _session_clock = _PauseAwareClock(pause_event)
     realtime_segments = []
 
     # 設定底部固定狀態列（快捷鍵提示 + 即時資訊）
@@ -4415,16 +4462,17 @@ def run_stream(capture_id: int, translator, model_name: str, model_path: str,
                 refresh_status_bar()
             # 寫入記錄檔
             timestamp = time.strftime("%H:%M:%S")
+            txt_ts = _fmt_session_ts(_session_clock.elapsed())
             with open(log_path, "a", encoding="utf-8") as log_f:
-                log_f.write(f"[{timestamp}] [{src_label}] {src_text}\n")
-                log_f.write(f"[{timestamp}] [{dst_label}] {result}\n\n")
+                log_f.write(f"[{txt_ts}] [{src_label}] {src_text}\n")
+                log_f.write(f"[{txt_ts}] [{dst_label}] {result}\n\n")
             _append_realtime_segment(
                 realtime_segments,
                 [
                     {"label": src_label, "text": src_text},
                     {"label": dst_label, "text": result},
                 ],
-                time.monotonic() - session_started_at,
+                _session_clock.elapsed(),
                 (asr_elapsed or 0) + (elapsed or 0),
             )
             _webui_send({"type": "transcription", "source": "main",
@@ -4450,7 +4498,8 @@ def run_stream(capture_id: int, translator, model_name: str, model_path: str,
     last_translated = ""
     buffer = ""
     _loop_tick = 0
-    _last_output_time = [time.monotonic()]  # whisper-stream ASR 耗時近似
+    _last_output_elapsed = [_session_clock.elapsed()]  # whisper-stream ASR 耗時近似
+    _was_paused = [False]  # 追蹤暫停狀態，用於 clock 邊界採樣
 
     while proc.poll() is None:
         try:
@@ -4459,6 +4508,17 @@ def run_stream(capture_id: int, translator, model_name: str, model_path: str,
             if _loop_tick >= 2 and _status_bar_active:
                 _loop_tick = 0
                 refresh_status_bar()
+
+            # 頂層暫停偵測：讓 clock 正確記錄暫停邊界
+            if pause_event.is_set():
+                if not _was_paused[0]:
+                    _session_clock.elapsed()  # 採樣：讓 clock 記錄暫停起始點
+                    _was_paused[0] = True
+                time.sleep(0.1)
+                continue
+            if _was_paused[0]:
+                _session_clock.elapsed()  # 採樣：讓 clock 累計暫停時長
+                _was_paused[0] = False
 
             if not os.path.exists(output_file):
                 time.sleep(0.1)
@@ -4500,8 +4560,9 @@ def run_stream(capture_id: int, translator, model_name: str, model_path: str,
 
                     # whisper-stream 無法直接取得 ASR 耗時，
                     # 用「兩次有效輸出的間隔」近似
-                    _asr_elapsed = time.monotonic() - _last_output_time[0]
-                    _last_output_time[0] = time.monotonic()
+                    _now_elapsed = _session_clock.elapsed()
+                    _asr_elapsed = max(0.0, _now_elapsed - _last_output_elapsed[0])
+                    _last_output_elapsed[0] = _now_elapsed
 
                     if mode in _EN_INPUT_MODES:
                         # 英文模式：過濾英文幻覺
@@ -4526,12 +4587,13 @@ def run_stream(capture_id: int, translator, model_name: str, model_path: str,
                                 refresh_status_bar()
                             last_translated = line
                             timestamp = time.strftime("%H:%M:%S")
+                            txt_ts = _fmt_session_ts(_session_clock.elapsed())
                             with open(log_path, "a", encoding="utf-8") as log_f:
-                                log_f.write(f"[{timestamp}] [EN] {line}\n\n")
+                                log_f.write(f"[{txt_ts}] [EN] {line}\n\n")
                             _append_realtime_segment(
                                 realtime_segments,
                                 [{"label": "EN", "text": line}],
-                                time.monotonic() - session_started_at,
+                                _session_clock.elapsed(),
                                 _asr_elapsed,
                             )
                             _webui_send({"type": "transcription", "source": "main",
@@ -4564,12 +4626,13 @@ def run_stream(capture_id: int, translator, model_name: str, model_path: str,
                                 refresh_status_bar()
                             last_translated = line
                             timestamp = time.strftime("%H:%M:%S")
+                            txt_ts = _fmt_session_ts(_session_clock.elapsed())
                             with open(log_path, "a", encoding="utf-8") as log_f:
-                                log_f.write(f"[{timestamp}] [{_src_l}] {line}\n\n")
+                                log_f.write(f"[{txt_ts}] [{_src_l}] {line}\n\n")
                             _append_realtime_segment(
                                 realtime_segments,
                                 [{"label": _src_l, "text": line}],
-                                time.monotonic() - session_started_at,
+                                _session_clock.elapsed(),
                                 _asr_elapsed,
                             )
                             _webui_send({"type": "transcription", "source": "main",
@@ -4637,12 +4700,13 @@ def run_stream(capture_id: int, translator, model_name: str, model_path: str,
                             refresh_status_bar()
                         last_translated = line
                         timestamp = time.strftime("%H:%M:%S")
+                        txt_ts = _fmt_session_ts(_session_clock.elapsed())
                         with open(log_path, "a", encoding="utf-8") as log_f:
-                            log_f.write(f"[{timestamp}] [中] {line}\n\n")
+                            log_f.write(f"[{txt_ts}] [中] {line}\n\n")
                         _append_realtime_segment(
                             realtime_segments,
                             [{"label": "中", "text": line}],
-                            time.monotonic() - session_started_at,
+                            _session_clock.elapsed(),
                             _asr_elapsed,
                         )
                         _webui_send({"type": "transcription", "source": "main",
@@ -4779,9 +4843,10 @@ def run_stream_moonshine(capture_id: int, translator, moonshine_model_name: str,
                 _status_bar_state["count"] += 1
                 refresh_status_bar()
             timestamp = time.strftime("%H:%M:%S")
+            txt_ts = _fmt_session_ts(_asr_clock.elapsed())
             with open(log_path, "a", encoding="utf-8") as log_f:
-                log_f.write(f"[{timestamp}] [{src_label}] {src_text}\n")
-                log_f.write(f"[{timestamp}] [{dst_label}] {result}\n\n")
+                log_f.write(f"[{txt_ts}] [{src_label}] {src_text}\n")
+                log_f.write(f"[{txt_ts}] [{dst_label}] {result}\n\n")
             _webui_send({"type": "transcription", "source": "main",
                          "src_lang": src_label, "src_text": src_text,
                          "dst_lang": dst_label, "dst_text": result,
@@ -4829,6 +4894,7 @@ def run_stream_moonshine(capture_id: int, translator, moonshine_model_name: str,
     transcriber = Transcriber(model_path=model_path, model_arch=model_arch, update_interval=1.0)
 
     # Moonshine ASR 計時：從首次 partial 到 completed
+    _asr_clock = _PauseAwareClock(pause_event)
     _ms_line_start = {}  # line_id → monotonic time
 
     class SubtitleListener(TranscriptEventListener):
@@ -4844,7 +4910,7 @@ def run_stream_moonshine(capture_id: int, translator, moonshine_model_name: str,
             # 記錄此行首次辨識的時間
             lid = event.line.line_id
             if lid not in _ms_line_start:
-                _ms_line_start[lid] = time.monotonic()
+                _ms_line_start[lid] = _asr_clock.elapsed()
             if mode in ("en2zh", "en"):
                 if is_en_hallucination(text):
                     return
@@ -4871,7 +4937,7 @@ def run_stream_moonshine(capture_id: int, translator, moonshine_model_name: str,
             # 計算 ASR 耗時
             lid = event.line.line_id
             t_start = _ms_line_start.pop(lid, None)
-            asr_elapsed = (time.monotonic() - t_start) if t_start else 0
+            asr_elapsed = max(0.0, _asr_clock.elapsed() - t_start) if t_start is not None else 0
 
             if mode in ("en2zh", "en"):
                 if is_en_hallucination(text):
@@ -4886,8 +4952,9 @@ def run_stream_moonshine(capture_id: int, translator, moonshine_model_name: str,
                         refresh_status_bar()
                     last_translated = text
                     timestamp = time.strftime("%H:%M:%S")
+                    txt_ts = _fmt_session_ts(_asr_clock.elapsed())
                     with open(log_path, "a", encoding="utf-8") as log_f:
-                        log_f.write(f"[{timestamp}] [EN] {text}\n\n")
+                        log_f.write(f"[{txt_ts}] [EN] {text}\n\n")
                     _webui_send({"type": "transcription", "source": "main",
                                  "src_lang": "EN", "src_text": text,
                                  "asr_time": round(asr_elapsed, 1),
@@ -5085,7 +5152,9 @@ def run_stream_moonshine(capture_id: int, translator, moonshine_model_name: str,
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
 
-    # 啟動音訊串流
+    # 啟動錄影與音訊串流（盡量同時，確保影音同步）
+    if video_recorder:
+        video_recorder.start()
     sd_stream.start()
     if rec_stream:
         rec_stream.start()
@@ -5359,6 +5428,8 @@ def run_stream_remote(capture_id: int, translator, model_name: str,
         # 同裝置錄音
         if recorder and rec_stream is None:
             recorder.write(audio)
+        if pause_event.is_set():
+            return
         # 降頻到 16kHz（簡單 decimation）
         step = max(1, int(round(resample_ratio)))
         downsampled = audio[::step]
@@ -5450,16 +5521,17 @@ def run_stream_remote(capture_id: int, translator, model_name: str,
                 _status_bar_state["count"] += 1
                 refresh_status_bar()
             timestamp = time.strftime("%H:%M:%S")
+            txt_ts = _fmt_session_ts(_session_clock.elapsed())
             with open(_log_path, "a", encoding="utf-8") as log_f:
-                log_f.write(f"[{timestamp}] [{src_label}] {src_text}\n")
-                log_f.write(f"[{timestamp}] [{dst_label}] {result}\n\n")
+                log_f.write(f"[{txt_ts}] [{src_label}] {src_text}\n")
+                log_f.write(f"[{txt_ts}] [{dst_label}] {result}\n\n")
             _append_realtime_segment(
                 realtime_segments,
                 [
                     {"label": src_label, "text": src_text},
                     {"label": dst_label, "text": result},
                 ],
-                time.monotonic() - session_started_at,
+                _session_clock.elapsed(),
                 (asr_elapsed or 0) + (elapsed or 0),
             )
             _webui_send({"type": "transcription", "source": "main",
@@ -5574,12 +5646,13 @@ def run_stream_remote(capture_id: int, translator, model_name: str,
                         _status_bar_state["count"] += 1
                         refresh_status_bar()
                     timestamp = time.strftime("%H:%M:%S")
+                    txt_ts = _fmt_session_ts(_session_clock.elapsed())
                     with open(log_path, "a", encoding="utf-8") as log_f:
-                        log_f.write(f"[{timestamp}] [{src_label}] {line}\n\n")
+                        log_f.write(f"[{txt_ts}] [{src_label}] {line}\n\n")
                     _append_realtime_segment(
                         realtime_segments,
                         [{"label": src_label, "text": line}],
-                        time.monotonic() - session_started_at,
+                        _session_clock.elapsed(),
                         proc_time,
                     )
                     _webui_send({"type": "transcription", "source": "main",
@@ -5676,7 +5749,9 @@ def run_stream_remote(capture_id: int, translator, model_name: str,
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
 
-    # ── 啟動音訊串流 ──
+    # ── 啟動錄影與音訊串流（盡量同時，確保影音同步）──
+    if video_recorder:
+        video_recorder.start()
     sd_stream.start()
     if rec_stream:
         rec_stream.start()
@@ -5696,7 +5771,7 @@ def run_stream_remote(capture_id: int, translator, model_name: str,
     _webui_send({"type": "progress", "stage": "正在監聽", "detail": "等待音訊輸入..."})
     _webui_send({"type": "started", "mode": mode})
 
-    session_started_at = time.monotonic()
+    _session_clock = _PauseAwareClock(pause_event)
     realtime_segments = []
 
     _tr_model = translator.model if isinstance(translator, OllamaTranslator) else ("NLLB" if isinstance(translator, NllbTranslator) else ("Argos" if isinstance(translator, ArgosTranslator) else ""))
@@ -5714,6 +5789,7 @@ def run_stream_remote(capture_id: int, translator, model_name: str,
     # 進度更新追蹤
     _last_progress_update = [time.monotonic()]
     _last_sentence_count = [0]
+    _was_paused = [False]
 
     try:
         while not stop_event.is_set():
@@ -5734,6 +5810,23 @@ def run_stream_remote(capture_id: int, translator, model_name: str,
 
             if pause_event.is_set():
                 # 暫停中：音訊持續擷取但不上傳
+                if not _was_paused[0]:
+                    _session_clock.elapsed()  # 採樣：讓 clock 記錄暫停起始點
+                    with ring_lock:
+                        ring_buffer.fill(0)
+                        ring_write_pos = 0
+                        ring_filled = 0
+                    _was_paused[0] = True
+                next_upload_time = now + step_sec
+                continue
+
+            if _was_paused[0]:
+                _session_clock.elapsed()  # 採樣：讓 clock 累計暫停時長
+                with ring_lock:
+                    ring_buffer.fill(0)
+                    ring_write_pos = 0
+                    ring_filled = 0
+                _was_paused[0] = False
                 next_upload_time = now + step_sec
                 continue
 
@@ -6012,6 +6105,8 @@ def run_stream_local_whisper(capture_id: int, translator, model_name: str,
         _push_rms(float(np.sqrt(np.mean(audio ** 2))))
         if recorder and rec_stream is None:
             recorder.write(audio)
+        if pause_event.is_set():
+            return
         n = len(audio)
         with ring_lock:
             if ring_write_pos + n <= ring_size:
@@ -6118,9 +6213,10 @@ def run_stream_local_whisper(capture_id: int, translator, model_name: str,
                 _status_bar_state["count"] += 1
                 refresh_status_bar()
             timestamp = time.strftime("%H:%M:%S")
+            txt_ts = _fmt_session_ts(_session_clock.elapsed())
             with open(_log_path, "a", encoding="utf-8") as log_f:
-                log_f.write(f"[{timestamp}] [{src_label}] {src_text}\n")
-                log_f.write(f"[{timestamp}] [{dst_label}] {result}\n\n")
+                log_f.write(f"[{txt_ts}] [{src_label}] {src_text}\n")
+                log_f.write(f"[{txt_ts}] [{dst_label}] {result}\n\n")
             _webui_send({"type": "transcription", "source": "main",
                          "src_lang": src_label, "src_text": src_text,
                          "dst_lang": dst_label, "dst_text": result,
@@ -6244,8 +6340,9 @@ def run_stream_local_whisper(capture_id: int, translator, model_name: str,
                         _status_bar_state["count"] += 1
                         refresh_status_bar()
                     timestamp = time.strftime("%H:%M:%S")
+                    txt_ts = _fmt_session_ts(_session_clock.elapsed())
                     with open(log_path, "a", encoding="utf-8") as log_f:
-                        log_f.write(f"[{timestamp}] [{src_label}] {line}\n\n")
+                        log_f.write(f"[{txt_ts}] [{src_label}] {line}\n\n")
                     _webui_send({"type": "transcription", "source": "main",
                                  "src_lang": src_label, "src_text": line,
                                  "asr_time": round(proc_time, 1), "timestamp": timestamp})
@@ -6338,7 +6435,9 @@ def run_stream_local_whisper(capture_id: int, translator, model_name: str,
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
 
-    # ── 啟動音訊串流 ──
+    # ── 啟動錄影與音訊串流（盡量同時，確保影音同步）──
+    if video_recorder:
+        video_recorder.start()
     sd_stream.start()
     if rec_stream:
         rec_stream.start()
@@ -6374,12 +6473,13 @@ def run_stream_local_whisper(capture_id: int, translator, model_name: str,
     _webui_send({"type": "progress", "stage": "正在監聽", "detail": "等待音訊輸入..."})
     _webui_send({"type": "started", "mode": mode})
 
-    session_started_at = time.monotonic()
+    _session_clock = _PauseAwareClock(pause_event)
     realtime_segments = []
     
     # 進度更新追蹤
     _last_progress_update = [time.monotonic()]
     _last_sentence_count = [0]
+    _was_paused = [False]
 
     _tr_model = translator.model if isinstance(translator, OllamaTranslator) else ("NLLB" if isinstance(translator, NllbTranslator) else ("Argos" if isinstance(translator, ArgosTranslator) else ""))
     _tr_loc = "伺服器" if isinstance(translator, OllamaTranslator) else ("本機" if isinstance(translator, (ArgosTranslator, NllbTranslator)) else "")
@@ -6409,6 +6509,22 @@ def run_stream_local_whisper(capture_id: int, translator, model_name: str,
                     _webui_send({"type": "progress", "stage": "正在處理", "detail": f"已處理 {current_count} 句"})
             
             if pause_event.is_set():
+                if not _was_paused[0]:
+                    _session_clock.elapsed()  # 採樣：讓 clock 記錄暫停起始點
+                    with ring_lock:
+                        ring_buffer.fill(0)
+                        ring_write_pos = 0
+                        ring_filled = 0
+                    _was_paused[0] = True
+                next_transcribe_time = now + step_sec
+                continue
+            if _was_paused[0]:
+                _session_clock.elapsed()  # 採樣：讓 clock 累計暫停時長
+                with ring_lock:
+                    ring_buffer.fill(0)
+                    ring_write_pos = 0
+                    ring_filled = 0
+                _was_paused[0] = False
                 next_transcribe_time = now + step_sec
                 continue
             if now < next_transcribe_time:
@@ -6838,6 +6954,8 @@ def run_stream_bidirectional(lb_device_id, mic_device_id,
         _push_rms(float(np.sqrt(np.mean(audio ** 2))))
         if recorder_lb:
             recorder_lb.write(audio)
+        if pause_event.is_set():
+            return
         n = len(audio)
         with lb_ring_lock:
             if lb_ring_write_pos + n <= lb_ring_size:
@@ -6864,6 +6982,8 @@ def run_stream_bidirectional(lb_device_id, mic_device_id,
         _push_rms(float(np.sqrt(np.mean(audio ** 2))))
         if recorder_mic:
             recorder_mic.write(audio)
+        if pause_event.is_set():
+            return
         n = len(audio)
         with mic_ring_lock:
             if mic_ring_write_pos + n <= mic_ring_size:
@@ -7230,13 +7350,14 @@ def run_stream_bidirectional(lb_device_id, mic_device_id,
                     _status_bar_state["count"] += 1
                     refresh_status_bar()
                 timestamp = time.strftime("%H:%M:%S")
+                txt_ts = _fmt_session_ts(_session_clock.elapsed())
                 _log_prefix = "◀ " if source == "loopback" else "▶ "
                 with open(log_path, "a", encoding="utf-8") as log_f:
-                    log_f.write(f"[{timestamp}] {_log_prefix}[{src_label}] {src_text}\n\n")
+                    log_f.write(f"[{txt_ts}] {_log_prefix}[{src_label}] {src_text}\n\n")
                 _append_realtime_segment(
                     realtime_segments,
                     [{"label": src_label, "text": src_text}],
-                    time.monotonic() - session_started_at,
+                    _session_clock.elapsed(),
                     asr_elapsed,
                 )
                 _webui_send({"type": "transcription", "source": source,
@@ -7256,17 +7377,18 @@ def run_stream_bidirectional(lb_device_id, mic_device_id,
                 _status_bar_state["count"] += 1
                 refresh_status_bar()
             timestamp = time.strftime("%H:%M:%S")
+            txt_ts = _fmt_session_ts(_session_clock.elapsed())
             _log_prefix = "◀ " if source == "loopback" else "▶ "
             with open(log_path, "a", encoding="utf-8") as log_f:
-                log_f.write(f"[{timestamp}] {_log_prefix}[{src_label}] {src_text}\n")
-                log_f.write(f"[{timestamp}] {_log_prefix}[{dst_label}] {result}\n\n")
+                log_f.write(f"[{txt_ts}] {_log_prefix}[{src_label}] {src_text}\n")
+                log_f.write(f"[{txt_ts}] {_log_prefix}[{dst_label}] {result}\n\n")
             _append_realtime_segment(
                 realtime_segments,
                 [
                     {"label": src_label, "text": src_text},
                     {"label": dst_label, "text": result},
                 ],
-                time.monotonic() - session_started_at,
+                _session_clock.elapsed(),
                 (asr_elapsed or 0) + (elapsed or 0),
             )
             _webui_send({"type": "transcription", "source": source,
@@ -7553,7 +7675,9 @@ def run_stream_bidirectional(lb_device_id, mic_device_id,
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
 
-    # ── 啟動音訊串流 ──
+    # ── 啟動錄影與音訊串流（盡量同時，確保影音同步）──
+    if video_recorder:
+        video_recorder.start()
     lb_stream.start()
     mic_stream.start()
 
@@ -7588,12 +7712,13 @@ def run_stream_bidirectional(lb_device_id, mic_device_id,
     _webui_send({"type": "progress", "stage": "正在監聽", "detail": "等待音訊輸入..."})
     _webui_send({"type": "started", "mode": mode})
 
-    session_started_at = time.monotonic()
+    _session_clock = _PauseAwareClock(pause_event)
     realtime_segments = []
     
     # 進度更新追蹤
     _last_progress_update = [time.monotonic()]
     _last_sentence_count = [0]
+    _was_paused = [False]
 
     _tr_model = translator_lb.model if isinstance(translator_lb, OllamaTranslator) else ("NLLB" if isinstance(translator_lb, NllbTranslator) else "")
     _tr_loc = "伺服器" if isinstance(translator_lb, OllamaTranslator) else ("本機" if isinstance(translator_lb, NllbTranslator) else "")
@@ -7627,6 +7752,32 @@ def run_stream_bidirectional(lb_device_id, mic_device_id,
                     _webui_send({"type": "progress", "stage": "正在處理", "detail": f"已處理 {current_count} 句"})
             
             if pause_event.is_set():
+                if not _was_paused[0]:
+                    _session_clock.elapsed()  # 採樣：讓 clock 記錄暫停起始點
+                    with lb_ring_lock:
+                        lb_ring_buffer.fill(0)
+                        lb_ring_write_pos = 0
+                        lb_ring_filled = 0
+                    with mic_ring_lock:
+                        mic_ring_buffer.fill(0)
+                        mic_ring_write_pos = 0
+                        mic_ring_filled = 0
+                    _was_paused[0] = True
+                next_time_lb = now + step_sec
+                next_time_mic = now + step_sec
+                continue
+
+            if _was_paused[0]:
+                _session_clock.elapsed()  # 採樣：讓 clock 累計暫停時長
+                with lb_ring_lock:
+                    lb_ring_buffer.fill(0)
+                    lb_ring_write_pos = 0
+                    lb_ring_filled = 0
+                with mic_ring_lock:
+                    mic_ring_buffer.fill(0)
+                    mic_ring_write_pos = 0
+                    mic_ring_filled = 0
+                _was_paused[0] = False
                 next_time_lb = now + step_sec
                 next_time_mic = now + step_sec
                 continue
@@ -7995,7 +8146,19 @@ class _VideoRecorder:
         self._paused = False
         self._ctrl_lock = threading.Lock()
         self._proc = None
-        self._start_new_segment()
+        self._started = False
+
+    def start(self):
+        """明確啟動錄影（應在錄音串流啟動前立即呼叫，確保影音同步）。
+        在此之前錄影器不會被 pause/resume 影響，避免 Ctrl+P 在 setup 期間
+        造成 _paused 旗標與實際錄影狀態不一致。"""
+        with self._ctrl_lock:
+            if self._started:
+                return
+            self._started = True
+            self._start_new_segment()
+        # 只有在實際開始錄影後才注冊為活躍錄影器，
+        # 避免 setup 期間的暫停事件破壞 segment 合併邏輯。
         _set_active_video_recorder(self)
 
     def _detect_default_camera(self):

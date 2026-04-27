@@ -18,7 +18,7 @@
     "webui_last": {
         "mode": "zh",
         "model": "large-v3-turbo",
-        "scene": "subtitle",
+        "scene": "training",
         "engine": "llm",
         "llm_model": "gemma4:latest",
         "llm_host": "127.0.0.1:11434",

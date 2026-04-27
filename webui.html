@@ -473,6 +473,7 @@ kbd{display:inline-block;font-family:inherit;font-size:10px;padding:1px 5px;bord
 <script>
 const $=id=>document.getElementById(id),msgsEl=$('msgs'),dot=$('dot'),newBtn=$('newBtn');
 let cnt=0,aScr=true,ws=null,rTimer=null,startTime=null,timerIv=null,_discShown=false;
+let _timerPausedAt=null,_timerPausedAccum=0;
 let curCfg={mode:'',modeLabel:'',model:'',engine:'',asrLoc:'',record:false,record_video:false,denoise:false,mic:false,postSummaryMode:'off'};
 let _autoLb='',_autoMic='';
 let _lastStartBody=null,_allDevices=[],_isSwitching=false,_curDeviceId=null,_curMicDeviceId=null;
@@ -518,8 +519,18 @@ function bc(s){return s<2?'bf':s<5?'bm':'bs'}
 function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML}
 msgsEl.addEventListener('scroll',()=>{const{scrollTop,scrollHeight,clientHeight}=msgsEl;const wasAtBottom=aScr;aScr=(scrollHeight-scrollTop-clientHeight)<50;if(!wasAtBottom&&aScr)newBtn.classList.remove('vis');else if(!aScr)newBtn.classList.add('vis')});
 function toEnd(){msgsEl.scrollTop=msgsEl.scrollHeight;aScr=true;newBtn.classList.remove('vis')}
-function startTimer(){startTime=Date.now();const el=$('hTimer');el.style.display='';el.dataset.bg='88:88';if(timerIv)clearInterval(timerIv);timerIv=setInterval(()=>{const t=Math.floor((Date.now()-startTime)/1000);const h=Math.floor(t/3600),m=Math.floor((t%3600)/60),s=t%60;const txt=h>0?(h+':'+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0')):(String(m).padStart(2,'0')+':'+String(s).padStart(2,'0'));el.textContent=txt;el.dataset.bg=txt.replace(/[0-9]/g,'8')},1000)}
-function stopTimer(){if(timerIv){clearInterval(timerIv);timerIv=null}$('hTimer').style.display='none'}
+function _renderTimer(){
+  if(startTime==null)return;
+  const el=$('hTimer');
+  const now=_timerPausedAt!=null?_timerPausedAt:Date.now();
+  const t=Math.floor(Math.max(0,now-startTime-_timerPausedAccum)/1000);
+  const h=Math.floor(t/3600),m=Math.floor((t%3600)/60),s=t%60;
+  const txt=h>0?(h+':'+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0')):(String(m).padStart(2,'0')+':'+String(s).padStart(2,'0'));
+  el.textContent=txt;
+  el.dataset.bg=txt.replace(/[0-9]/g,'8');
+}
+function startTimer(){startTime=Date.now();_timerPausedAt=null;_timerPausedAccum=0;const el=$('hTimer');el.style.display='';el.dataset.bg='88:88';if(timerIv)clearInterval(timerIv);_renderTimer();timerIv=setInterval(_renderTimer,1000)}
+function stopTimer(){if(timerIv){clearInterval(timerIv);timerIv=null}startTime=null;_timerPausedAt=null;_timerPausedAccum=0;$('hTimer').style.display='none'}
 let volHist=new Array(20).fill(0);
 function pushVol(v){volHist.push(Math.min(Math.pow(v*20,.6),1));if(volHist.length>20)volHist.shift();const el=$('volBar');el.innerHTML='';volHist.forEach(v=>{const s=document.createElement('span');s.style.height=Math.max(1,v*18)+'px';el.appendChild(s)})}
 pushVol(0);
@@ -736,6 +747,10 @@ function _setRecVideoBadge(paused){
 }
 function _applyPauseState(paused){
   _paused=!!paused;
+  if(startTime!=null){
+    if(_paused&&_timerPausedAt==null){_timerPausedAt=Date.now();_renderTimer()}
+    if(!_paused&&_timerPausedAt!=null){_timerPausedAccum+=Date.now()-_timerPausedAt;_timerPausedAt=null;_renderTimer()}
+  }
   const btn=$('pauseBtn');
   btn.innerHTML=_paused?'繼續 <kbd>P</kbd>':'暫停 <kbd>P</kbd>';
   btn.style.background=_paused?'var(--green)':'var(--orange)';
