@@ -767,6 +767,12 @@ def _toggle_active_video_recorder(paused: bool):
         pass
 
 
+def _is_recording_paused() -> bool:
+    """回傳目前全域暫停狀態（WebUI/快捷鍵共用）。"""
+    ev = _webui_pause_event
+    return bool(ev and ev.is_set())
+
+
 def _emit_pause_state(paused: bool):
     _webui_send({"type": "pause_state", "paused": bool(paused)})
 
@@ -4192,6 +4198,8 @@ def run_stream(capture_id: int, translator, model_name: str, model_path: str,
             recorder = _AudioRecorder(rec_sr, rec_ch, topic=meeting_topic, mode=mode)
 
             def rec_callback(indata, frames, time_info, status):
+                if _is_recording_paused():
+                    return
                 recorder.write_raw(indata)
                 _push_rms(float(np.sqrt(np.mean(indata ** 2))))
 
@@ -4212,6 +4220,8 @@ def run_stream(capture_id: int, translator, model_name: str, model_path: str,
             recorder = _AudioRecorder(rec_sr, rec_ch, topic=meeting_topic, mode=mode)
 
             def rec_callback(indata, frames, time_info, status):
+                if _is_recording_paused():
+                    return
                 recorder.write_raw(indata)
                 _push_rms(float(np.sqrt(np.mean(indata ** 2))))
 
@@ -5014,7 +5024,7 @@ def run_stream_moonshine(capture_id: int, translator, moonshine_model_name: str,
                 recorder = _AudioRecorder(rec_sr, rec_ch, topic=meeting_topic, mode=mode)
 
                 def rec_callback(indata, frames, time_info, status):
-                    if not stop_event.is_set():
+                    if not stop_event.is_set() and not _is_recording_paused():
                         recorder.write_raw(indata)
 
                 try:
@@ -5036,7 +5046,7 @@ def run_stream_moonshine(capture_id: int, translator, moonshine_model_name: str,
                 recorder = _AudioRecorder(rec_sr, rec_ch, topic=meeting_topic, mode=mode)
 
                 def rec_callback(indata, frames, time_info, status):
-                    if not stop_event.is_set():
+                    if not stop_event.is_set() and not _is_recording_paused():
                         recorder.write_raw(indata)
 
                 try:
@@ -5067,6 +5077,8 @@ def run_stream_moonshine(capture_id: int, translator, moonshine_model_name: str,
         else:
             audio = audio.flatten()
         _push_rms(float(np.sqrt(np.mean(audio ** 2))))
+        if _is_recording_paused():
+            return
         if recorder and rec_stream is None:
             # 同裝置錄音：寫入 mono
             recorder.write(audio)
@@ -5325,7 +5337,7 @@ def run_stream_remote(capture_id: int, translator, model_name: str,
                 recorder = _AudioRecorder(rec_sr, rec_ch, topic=meeting_topic, mode=mode)
 
                 def rec_callback(indata, frames, time_info, status):
-                    if not stop_event.is_set():
+                    if not stop_event.is_set() and not _is_recording_paused():
                         recorder.write_raw(indata)
 
                 try:
@@ -5346,7 +5358,7 @@ def run_stream_remote(capture_id: int, translator, model_name: str,
                 recorder = _AudioRecorder(rec_sr, rec_ch, topic=meeting_topic, mode=mode)
 
                 def rec_callback(indata, frames, time_info, status):
-                    if not stop_event.is_set():
+                    if not stop_event.is_set() and not _is_recording_paused():
                         recorder.write_raw(indata)
 
                 try:
@@ -5425,11 +5437,11 @@ def run_stream_remote(capture_id: int, translator, model_name: str,
             audio = audio.flatten()
         # RMS
         _push_rms(float(np.sqrt(np.mean(audio ** 2))))
+        if _is_recording_paused():
+            return
         # 同裝置錄音
         if recorder and rec_stream is None:
             recorder.write(audio)
-        if pause_event.is_set():
-            return
         # 降頻到 16kHz（簡單 decimation）
         step = max(1, int(round(resample_ratio)))
         downsampled = audio[::step]
@@ -6004,7 +6016,7 @@ def run_stream_local_whisper(capture_id: int, translator, model_name: str,
                 recorder = _AudioRecorder(rec_sr, rec_ch, topic=meeting_topic, mode=mode)
 
                 def rec_callback(indata, frames, time_info, status):
-                    if not stop_event.is_set():
+                    if not stop_event.is_set() and not _is_recording_paused():
                         recorder.write_raw(indata)
 
                 try:
@@ -6026,7 +6038,7 @@ def run_stream_local_whisper(capture_id: int, translator, model_name: str,
                 recorder = _AudioRecorder(rec_sr, rec_ch, topic=meeting_topic, mode=mode)
 
                 def rec_callback(indata, frames, time_info, status):
-                    if not stop_event.is_set():
+                    if not stop_event.is_set() and not _is_recording_paused():
                         recorder.write_raw(indata)
 
                 try:
@@ -6103,10 +6115,10 @@ def run_stream_local_whisper(capture_id: int, translator, model_name: str,
         else:
             audio = audio.flatten()
         _push_rms(float(np.sqrt(np.mean(audio ** 2))))
+        if _is_recording_paused():
+            return
         if recorder and rec_stream is None:
             recorder.write(audio)
-        if pause_event.is_set():
-            return
         n = len(audio)
         with ring_lock:
             if ring_write_pos + n <= ring_size:
@@ -6952,10 +6964,10 @@ def run_stream_bidirectional(lb_device_id, mic_device_id,
         else:
             audio = audio.flatten()
         _push_rms(float(np.sqrt(np.mean(audio ** 2))))
+        if _is_recording_paused():
+            return
         if recorder_lb:
             recorder_lb.write(audio)
-        if pause_event.is_set():
-            return
         n = len(audio)
         with lb_ring_lock:
             if lb_ring_write_pos + n <= lb_ring_size:
@@ -6980,10 +6992,10 @@ def run_stream_bidirectional(lb_device_id, mic_device_id,
         else:
             audio = audio.flatten()
         _push_rms(float(np.sqrt(np.mean(audio ** 2))))
+        if _is_recording_paused():
+            return
         if recorder_mic:
             recorder_mic.write(audio)
-        if pause_event.is_set():
-            return
         n = len(audio)
         with mic_ring_lock:
             if mic_ring_write_pos + n <= mic_ring_size:
@@ -8480,6 +8492,12 @@ class _DualStreamMixer:
             self._lb_buf = self._np.zeros(0, dtype=self._np.float32)
             self._mic_buf = self._np.zeros(0, dtype=self._np.float32)
 
+    def discard_pending(self):
+        """清除未對齊的暫存，避免暫停後把舊音訊補寫進錄音檔。"""
+        with self._lock:
+            self._lb_buf = self._np.zeros(0, dtype=self._np.float32)
+            self._mic_buf = self._np.zeros(0, dtype=self._np.float32)
+
 
 def _setup_mixed_recording(stop_event, meeting_topic):
     """建立 Windows 混合錄音（WASAPI Loopback + 麥克風）。
@@ -8505,6 +8523,9 @@ def _setup_mixed_recording(stop_event, meeting_topic):
     def lb_callback(indata, frames, time_info, status):
         if stop_event.is_set():
             return
+        if _is_recording_paused():
+            mixer.discard_pending()
+            return
         audio = indata.astype(np.float32)
         if audio.ndim > 1 and audio.shape[1] > 1:
             mono = audio.mean(axis=1)
@@ -8514,6 +8535,9 @@ def _setup_mixed_recording(stop_event, meeting_topic):
 
     def mic_callback(indata, frames, time_info, status):
         if stop_event.is_set():
+            return
+        if _is_recording_paused():
+            mixer.discard_pending()
             return
         audio = indata.astype(np.float32)
         if audio.ndim > 1 and audio.shape[1] > 1:
