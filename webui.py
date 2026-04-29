@@ -932,6 +932,15 @@ def _build_args(body: dict) -> list:
         args.extend(["--topic", topic])
     if body.get("record"):
         args.append("--record")
+        rec_audio_source = body.get("rec_audio_source", "system")
+        if rec_audio_source == "both":
+            args.extend(["--rec-device", "-200"])   # WASAPI_MIXED_ID
+        elif rec_audio_source == "mic":
+            md = body.get("mic_device")
+            if md is not None and md != "":
+                args.extend(["--rec-device", str(md)])
+            else:
+                args.extend(["--rec-device", "-300"])   # WASAPI_MIC_AUTO_ID
     if body.get("record_video"):
         args.append("--record-video")
     video_device = body.get("video_device", "").strip()
@@ -1001,6 +1010,7 @@ async def api_start(request: Request, body: dict = {}):
             "llm_model": body.get("llm_model"), "llm_host": body.get("llm_host"),
             "local_asr": body.get("local_asr", False),
             "record": body.get("record", False), "mic": body.get("mic", False),
+            "rec_audio_source": body.get("rec_audio_source", "system"),
             "record_video": body.get("record_video", False),
             "video_device": body.get("video_device", ""),
             "denoise": body.get("denoise", True),

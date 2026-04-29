@@ -25,6 +25,7 @@
         "local_asr": true,
         "record": true,
         "mic": true,
+        "rec_audio_source": "both",
         "record_video": true,
         "video_device": "",
         "denoise": true,

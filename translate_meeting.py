@@ -126,6 +126,7 @@ except ImportError:
 # Windows WASAPI Loopback（零設定擷取系統播放音訊）
 WASAPI_LOOPBACK_ID = -100  # sentinel，表示使用 WASAPI Loopback
 WASAPI_MIXED_ID = -200     # sentinel，表示 Windows 混合錄音（Loopback + 麥克風）
+WASAPI_MIC_AUTO_ID = -300  # sentinel，表示自動偵測麥克風（非 Loopback）錄音
 _PYAUDIOWPATCH_AVAILABLE = False
 if IS_WINDOWS:
     try:
@@ -4169,7 +4170,11 @@ def run_stream(capture_id: int, translator, model_name: str, model_path: str,
         import numpy as np
         # 使用指定的錄音裝置，或自動找 Loopback 裝置
         rec_dev_id = rec_device
-        if rec_dev_id is None:
+        if rec_dev_id == WASAPI_MIC_AUTO_ID:
+            # 自動偵測麥克風（非 Loopback）
+            mic_id = _find_default_mic()
+            rec_dev_id = mic_id if mic_id is not None else sd.default.device[0]
+        elif rec_dev_id is None:
             # Windows: 優先用 WASAPI Loopback
             if IS_WINDOWS:
                 wb_info = _find_wasapi_loopback()
@@ -7630,8 +7635,10 @@ def run_stream_bidirectional(lb_device_id, mic_device_id,
         if video_recorder:
             try:
                 _debug_progress("bidi cleanup: 開始 finalize video")
-                audio_path = recorder_lb.path if recorder_lb else None
-                video_path = video_recorder.finalize(audio_path)
+                # 用 close() 回傳的最終輸出路徑，避免使用轉檔前暫存檔路徑
+                audio_path = p1 or None
+                mic_audio_path = p2 or None
+                video_path = video_recorder.finalize(audio_path, extra_audio_path=mic_audio_path)
                 print(f"  {C_OK}錄影已儲存: {video_path}{RESET}", flush=True)
             except Exception as e:
                 print(f"  {C_HIGHLIGHT}[警告] 影片錄製或合併失敗: {e}{RESET}", flush=True)
@@ -8311,7 +8318,7 @@ class _VideoRecorder:
             except OSError:
                 pass
 
-    def finalize(self, audio_path=None):
+    def finalize(self, audio_path=None, extra_audio_path=None):
         self.stop()
         valid_seg_paths = []
         for p in self._seg_paths:
@@ -8346,7 +8353,7 @@ class _VideoRecorder:
                                 "-f", "concat", "-safe", "0", "-i", concat_list,
                                 "-c", "copy", merged_path],
                                check=True, stdout=subprocess.PIPE,
-                               stderr=subprocess.PIPE, text=True, **_SUBPROCESS_FLAGS)
+                               stderr=subprocess.PIPE, text=False, **_SUBPROCESS_FLAGS)
                 print(f"  [DEBUG] concat demuxer 成功", flush=True)
             except Exception as e:
                 print(f"  [DEBUG] concat demuxer 失敗: {e}", flush=True)
@@ -8365,7 +8372,7 @@ class _VideoRecorder:
                         merged_path,
                     ]
                     subprocess.run(recode_cmd, check=True, stdout=subprocess.PIPE,
-                                       stderr=subprocess.PIPE, text=True, **_SUBPROCESS_FLAGS)
+                                       stderr=subprocess.PIPE, text=False, **_SUBPROCESS_FLAGS)
                     print(f"  [DEBUG] re-encode concat filter 成功", flush=True)
                 except Exception as e:
                     merge_error = e
@@ -8374,9 +8381,29 @@ class _VideoRecorder:
 
         print(f"  [DEBUG] 準備輸出 MP4 到: {self.path}", flush=True)
         cmd = [self._ffmpeg, "-y", "-hide_banner", "-loglevel", "error", "-i", merged_path]
-        if audio_path:
-            print(f"  [DEBUG] 使用音訊路徑: {audio_path}", flush=True)
-            cmd += ["-i", audio_path, "-map", "0:v", "-map", "1:a?",
+        # 檢查系統音訊與麥克風音訊是否有效（存在且非 0 bytes）
+        _sys_audio = audio_path if (audio_path and os.path.exists(audio_path)
+                                    and os.path.getsize(audio_path) > 0) else None
+        _mic_audio = extra_audio_path if (extra_audio_path and os.path.exists(extra_audio_path)
+                                          and os.path.getsize(extra_audio_path) > 0) else None
+
+        if _sys_audio and _mic_audio:
+            _a1_mb = os.path.getsize(_sys_audio) / (1024 * 1024)
+            _a2_mb = os.path.getsize(_mic_audio) / (1024 * 1024)
+            print(f"  [DEBUG] 使用音訊路徑（系統+麥克風混合）: {_sys_audio} ({_a1_mb:.2f} MB) + {_mic_audio} ({_a2_mb:.2f} MB)", flush=True)
+            cmd += ["-i", _sys_audio, "-i", _mic_audio,
+                    "-filter_complex", "[1:a][2:a]amix=inputs=2:duration=longest:weights='1 1':normalize=1[aout]",
+                    "-map", "0:v", "-map", "[aout]",
+                    "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-shortest", self.path]
+        elif _sys_audio:
+            print(f"  [DEBUG] 使用音訊路徑（系統音訊）: {_sys_audio}", flush=True)
+            if extra_audio_path and not _mic_audio:
+                print(f"  [DEBUG] 麥克風音訊無效，略過混音: {extra_audio_path}", flush=True)
+            cmd += ["-i", _sys_audio, "-map", "0:v", "-map", "1:a?",
+                    "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-shortest", self.path]
+        elif _mic_audio:
+            print(f"  [DEBUG] 系統音訊無效，改用麥克風音訊: {_mic_audio}", flush=True)
+            cmd += ["-i", _mic_audio, "-map", "0:v", "-map", "1:a?",
                     "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-shortest", self.path]
         else:
             print(f"  [DEBUG] 無音訊，純視訊輸出", flush=True)
@@ -8385,8 +8412,10 @@ class _VideoRecorder:
         try:
             print(f"  [DEBUG] 執行最終輸出命令...", flush=True)
             result = subprocess.run(cmd, check=True, stdout=subprocess.PIPE,
-                           stderr=subprocess.PIPE, text=True, **_SUBPROCESS_FLAGS)
+                           stderr=subprocess.PIPE, text=False, **_SUBPROCESS_FLAGS)
             print(f"  [DEBUG] MP4 輸出成功", flush=True)
+            if _sys_audio and _mic_audio:
+                print(f"  [DEBUG] 音訊混合成功（系統音訊 + 麥克風）", flush=True)
             self._cleanup_temp_files()
             if concat_list and os.path.exists(concat_list):
                 try:
@@ -8410,7 +8439,7 @@ class _VideoRecorder:
                     "-i", merged_path,
                     "-c:v", "copy", "-an", self.path
                 ], check=True, stdout=subprocess.PIPE,
-                   stderr=subprocess.PIPE, text=True, **_SUBPROCESS_FLAGS)
+                   stderr=subprocess.PIPE, text=False, **_SUBPROCESS_FLAGS)
                 print(f"  [DEBUG]   備用方案 1 成功", flush=True)
                 return self.path
             except Exception as e2:
@@ -8423,7 +8452,7 @@ class _VideoRecorder:
                         "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
                         "-pix_fmt", "yuv420p", "-an", self.path
                     ], check=True, stdout=subprocess.PIPE,
-                       stderr=subprocess.PIPE, text=True, **_SUBPROCESS_FLAGS)
+                                   stderr=subprocess.PIPE, text=False, **_SUBPROCESS_FLAGS)
                     print(f"  [DEBUG]   備用方案 2 成功", flush=True)
                     return self.path
                 except Exception as e3:
@@ -13885,6 +13914,15 @@ def main():
     # --rec-device 自動啟用 --record
     if args.rec_device is not None and not args.record:
         args.record = True
+
+    # WASAPI_MIC_AUTO_ID sentinel：解析為實際麥克風裝置 ID
+    if args.rec_device == WASAPI_MIC_AUTO_ID:
+        _mic_id = _find_default_mic()
+        if _mic_id is not None:
+            args.rec_device = _mic_id
+        else:
+            import sounddevice as _sd_tmp
+            args.rec_device = _sd_tmp.default.device[0]
 
     # --num-speakers 沒搭配 --diarize 時警告
     if args.num_speakers and not args.diarize:
